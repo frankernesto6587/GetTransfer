@@ -40,7 +40,7 @@ export function ConfirmarView() {
     const hasRef = refCorriente.trim().length > 0
     const hasNombre = nombre.trim().length >= 6
     const hasCi = /^\d{11}$/.test(ci.trim())
-    const hasCuenta = cuenta.trim().length > 0
+    const hasCuenta = cuenta.replace(/[\s-]/g, '').length === 16
     const hasImporte = importe.length > 0
     return hasRef || (hasNombre && hasImporte) || (hasCi && hasImporte) || (hasCuenta && hasImporte)
   }, [refCorriente, nombre, ci, cuenta, importe])
@@ -59,7 +59,7 @@ export function ConfirmarView() {
         importe: importe ? Number(importe) : undefined,
         nombre: nombre.trim() || undefined,
         ci: ci.trim() || undefined,
-        cuentaOrdenante: cuenta.trim() || undefined,
+        cuentaOrdenante: cuenta.replace(/\D/g, '') || undefined,
         refCorriente: refCorriente.trim() || undefined,
       })
       setResults(data)
@@ -257,10 +257,16 @@ export function ConfirmarView() {
                 <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Cuenta</label>
                 <input
                   type="text"
-                  placeholder="Cuenta del ordenante"
+                  inputMode="numeric"
+                  maxLength={19}
+                  placeholder="0000-0000-0000-0000"
                   value={cuenta}
-                  onChange={(e) => setCuenta(e.target.value)}
-                  className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, '').slice(0, 16)
+                    const formatted = raw.replace(/(\d{4})(?=\d)/g, '$1-')
+                    setCuenta(formatted)
+                  }}
+                  className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors font-mono tracking-wider"
                 />
               </div>
               <div>

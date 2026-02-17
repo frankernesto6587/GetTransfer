@@ -6,7 +6,7 @@ const buscarSchema = z.object({
   importe: z.number().optional(),
   nombre: z.string().min(6, 'El nombre debe tener al menos 6 caracteres').optional(),
   ci: z.string().regex(/^\d{11}$/, 'El CI debe ser exactamente 11 digitos').optional(),
-  cuentaOrdenante: z.string().min(1).optional(),
+  cuentaOrdenante: z.string().transform(v => v.replace(/[\s-]/g, '')).pipe(z.string().regex(/^\d{16}$/, 'La cuenta debe ser exactamente 16 digitos')).optional(),
   refCorriente: z.string().min(1).optional(),
 }).refine(
   (d) => {
