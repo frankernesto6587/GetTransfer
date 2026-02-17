@@ -1,14 +1,10 @@
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import { DollarSign, TrendingUp, ArrowLeftRight } from 'lucide-react'
 import { DailyChart } from '../components/DailyChart'
-import { getResumenKey, fetcher } from '../lib/api'
-import type { Resumen } from '../types'
+import { resumenQuery } from '../lib/api'
 
 export function ReportesView() {
-  const { data: resumen, isLoading } = useSWR<Resumen>(
-    getResumenKey(),
-    (url: string) => fetcher<Resumen>(url),
-  )
+  const { data: resumen, isLoading } = useQuery(resumenQuery())
 
   if (isLoading) {
     return (

@@ -6,7 +6,7 @@ export const fetcher = <T>(url: string): Promise<T> =>
     return r.json() as Promise<T>
   })
 
-interface TransferenciasParams {
+export interface TransferenciasParams {
   page?: number
   limit?: number
   nombre?: string
@@ -27,10 +27,15 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   return `/api/transferencias${qs ? `?${qs}` : ''}`
 }
 
-export function getResumenKey(): string {
-  return '/api/resumen'
+export const transferenciasQuery = (params: TransferenciasParams) => {
+  const url = buildTransferenciasUrl(params)
+  return {
+    queryKey: ['transferencias', params] as const,
+    queryFn: () => fetcher<TransferenciasResponse>(url),
+  }
 }
 
-export const resumenFetcher = () => fetcher<Resumen>(getResumenKey())
-export const transferenciasFetcher = (url: string) =>
-  fetcher<TransferenciasResponse>(url)
+export const resumenQuery = () => ({
+  queryKey: ['resumen'] as const,
+  queryFn: () => fetcher<Resumen>('/api/resumen'),
+})

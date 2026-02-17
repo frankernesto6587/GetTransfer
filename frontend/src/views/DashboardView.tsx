@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeftRight,
   DollarSign,
@@ -10,13 +10,7 @@ import { MetricCard } from '../components/MetricCard'
 import { DailyChart } from '../components/DailyChart'
 import { TransferTable } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
-import {
-  buildTransferenciasUrl,
-  getResumenKey,
-  transferenciasFetcher,
-  fetcher,
-} from '../lib/api'
-import type { TransferenciasResponse, Resumen } from '../types'
+import { transferenciasQuery, resumenQuery } from '../lib/api'
 
 export function DashboardView() {
   const [page, setPage] = useState(1)
@@ -39,19 +33,11 @@ export function DashboardView() {
     }
   }, [])
 
-  const transferenciasUrl = buildTransferenciasUrl({
-    page,
-    limit: 20,
-    nombre: debouncedSearch || undefined,
-  })
-
-  const { data: transferencias, isLoading: loadingTransferencias } =
-    useSWR<TransferenciasResponse>(transferenciasUrl, transferenciasFetcher)
-
-  const { data: resumen, isLoading: loadingResumen } = useSWR<Resumen>(
-    getResumenKey(),
-    (url: string) => fetcher<Resumen>(url),
+  const { data: transferencias, isLoading: loadingTransferencias } = useQuery(
+    transferenciasQuery({ page, limit: 20, nombre: debouncedSearch || undefined }),
   )
+
+  const { data: resumen, isLoading: loadingResumen } = useQuery(resumenQuery())
 
   if (loadingResumen && loadingTransferencias) {
     return (

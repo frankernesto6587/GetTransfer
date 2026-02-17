@@ -1,12 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import { TransferTable } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
-import {
-  buildTransferenciasUrl,
-  transferenciasFetcher,
-} from '../lib/api'
-import type { TransferenciasResponse } from '../types'
+import { transferenciasQuery } from '../lib/api'
 
 export function TransferenciasView() {
   const [page, setPage] = useState(1)
@@ -32,17 +28,16 @@ export function TransferenciasView() {
     }
   }, [])
 
-  const transferenciasUrl = buildTransferenciasUrl({
-    page,
-    limit: 50,
-    nombre: debouncedSearch || undefined,
-    fecha: fecha || undefined,
-    desde: desde ? Number(desde) : undefined,
-    hasta: hasta ? Number(hasta) : undefined,
-  })
-
-  const { data: transferencias, isLoading } =
-    useSWR<TransferenciasResponse>(transferenciasUrl, transferenciasFetcher)
+  const { data: transferencias, isLoading } = useQuery(
+    transferenciasQuery({
+      page,
+      limit: 50,
+      nombre: debouncedSearch || undefined,
+      fecha: fecha || undefined,
+      desde: desde ? Number(desde) : undefined,
+      hasta: hasta ? Number(hasta) : undefined,
+    }),
+  )
 
   return (
     <div className="p-8 max-w-[1400px]">
