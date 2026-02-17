@@ -10,6 +10,7 @@ export function ConfirmarView() {
   const [importe, setImporte] = useState('')
   const [nombre, setNombre] = useState('')
   const [ci, setCi] = useState('')
+  const [cuenta, setCuenta] = useState('')
   const [refCorriente, setRefCorriente] = useState('')
 
   const [results, setResults] = useState<Transferencia[] | null>(null)
@@ -32,15 +33,17 @@ export function ConfirmarView() {
 
   // Valid search combinations:
   // - refCorriente alone
-  // - nombre + importe (+ optional ci, refCorriente)
-  // - ci + importe (+ optional refCorriente)
+  // - nombre + importe (+ optional ci, cuenta, refCorriente)
+  // - ci + importe
+  // - cuenta + importe
   const canSearch = useMemo(() => {
     const hasRef = refCorriente.trim().length > 0
     const hasNombre = nombre.trim().length >= 6
     const hasCi = /^\d{11}$/.test(ci.trim())
+    const hasCuenta = cuenta.trim().length > 0
     const hasImporte = importe.length > 0
-    return hasRef || (hasNombre && hasImporte) || (hasCi && hasImporte)
-  }, [refCorriente, nombre, ci, importe])
+    return hasRef || (hasNombre && hasImporte) || (hasCi && hasImporte) || (hasCuenta && hasImporte)
+  }, [refCorriente, nombre, ci, cuenta, importe])
 
   const handleBuscar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,6 +59,7 @@ export function ConfirmarView() {
         importe: importe ? Number(importe) : undefined,
         nombre: nombre.trim() || undefined,
         ci: ci.trim() || undefined,
+        cuentaOrdenante: cuenta.trim() || undefined,
         refCorriente: refCorriente.trim() || undefined,
       })
       setResults(data)
@@ -111,6 +115,7 @@ export function ConfirmarView() {
     setImporte('')
     setNombre('')
     setCi('')
+    setCuenta('')
     setRefCorriente('')
     setResults(null)
     setConfirmada(null)
@@ -249,6 +254,16 @@ export function ConfirmarView() {
                 />
               </div>
               <div>
+                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Cuenta</label>
+                <input
+                  type="text"
+                  placeholder="Cuenta del ordenante"
+                  value={cuenta}
+                  onChange={(e) => setCuenta(e.target.value)}
+                  className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
+                />
+              </div>
+              <div>
                 <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Ref Destino</label>
                 <input
                   type="text"
@@ -292,6 +307,13 @@ export function ConfirmarView() {
               </div>
               <div className="flex items-start gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
                 <span className="text-gold font-mono text-xs mt-0.5 shrink-0">3</span>
+                <div>
+                  <span className="text-white">Cuenta + Importe</span>
+                  <span className="text-tertiary ml-2">— Busqueda por numero de cuenta del ordenante.</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <span className="text-gold font-mono text-xs mt-0.5 shrink-0">4</span>
                 <div>
                   <span className="text-white">Ref Destino</span>
                   <span className="text-tertiary ml-2">— Sola, sin otros campos. Busqueda directa por referencia.</span>

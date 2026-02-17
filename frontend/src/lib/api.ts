@@ -48,6 +48,7 @@ export interface BuscarConfirmacionParams {
   importe?: number
   nombre?: string
   ci?: string
+  cuentaOrdenante?: string
   refCorriente?: string
 }
 

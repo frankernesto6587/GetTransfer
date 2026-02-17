@@ -6,15 +6,18 @@ const buscarSchema = z.object({
   importe: z.number().optional(),
   nombre: z.string().min(6, 'El nombre debe tener al menos 6 caracteres').optional(),
   ci: z.string().regex(/^\d{11}$/, 'El CI debe ser exactamente 11 digitos').optional(),
+  cuentaOrdenante: z.string().min(1).optional(),
   refCorriente: z.string().min(1).optional(),
 }).refine(
   (d) => {
     // nombre requires importe
     if (d.nombre && !d.importe) return false;
-    // ci requires importe
+    // ci alone requires importe
     if (d.ci && !d.refCorriente && !d.importe) return false;
-    // at least one search param
-    return !!(d.refCorriente || (d.nombre && d.importe) || (d.ci && d.importe));
+    // cuenta requires importe
+    if (d.cuentaOrdenante && !d.importe) return false;
+    // at least one valid combination
+    return !!(d.refCorriente || (d.nombre && d.importe) || (d.ci && d.importe) || (d.cuentaOrdenante && d.importe));
   },
   { message: 'Combinacion de parametros invalida' },
 );
