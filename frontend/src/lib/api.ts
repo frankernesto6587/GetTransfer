@@ -1,4 +1,4 @@
-import type { TransferenciasResponse, Resumen } from '../types'
+import type { Transferencia, TransferenciasResponse, Resumen } from '../types'
 
 export const fetcher = <T>(url: string): Promise<T> =>
   fetch(url).then((r) => {
@@ -43,3 +43,29 @@ export const resumenQuery = () => ({
   queryKey: ['resumen'] as const,
   queryFn: () => fetcher<Resumen>('/api/resumen'),
 })
+
+export interface BuscarConfirmacionParams {
+  importe: number
+  nombre: string
+  ci?: string
+  refCorriente?: string
+}
+
+export async function buscarPendientes(params: BuscarConfirmacionParams): Promise<Transferencia[]> {
+  const res = await fetch('/api/confirmar/buscar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function confirmarTransferencia(id: number): Promise<Transferencia> {
+  const res = await fetch(`/api/confirmar/${id}`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}

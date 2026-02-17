@@ -61,6 +61,22 @@ const columns = [
     ),
     meta: { align: 'right' },
   }),
+  col.accessor('codigoConfirmacion', {
+    header: 'Estado',
+    enableSorting: false,
+    cell: (info) => {
+      const codigo = info.getValue()
+      return codigo ? (
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400" title={codigo}>
+          {codigo}
+        </span>
+      ) : (
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
+          Pendiente
+        </span>
+      )
+    },
+  }),
 ]
 
 interface TransferTableProps {

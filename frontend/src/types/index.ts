@@ -19,6 +19,8 @@ export interface Transferencia {
   formato: string
   observacionesRaw: string
   createdAt: string
+  codigoConfirmacion: string | null
+  confirmedAt: string | null
 }
 
 export interface PaginationInfo {

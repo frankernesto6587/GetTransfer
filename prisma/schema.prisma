@@ -28,6 +28,9 @@ model Transferencia {
   observacionesRaw    String   @default("")
   createdAt           DateTime @default(now())
 
+  codigoConfirmacion  String?   @unique
+  confirmedAt         DateTime?
+
   @@index([fecha])
   @@index([nombreOrdenante])
   @@index([importe])

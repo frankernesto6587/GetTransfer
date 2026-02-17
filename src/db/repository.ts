@@ -1,6 +1,9 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { customAlphabet } from 'nanoid';
 import { TransferenciaEntrada } from '../scraper/parser';
+
+const generateCode = customAlphabet('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 8);
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -113,4 +116,50 @@ export async function getResumen() {
       total: totales._sum.importe ?? 0,
     },
   };
+}
+
+export interface BuscarPendientesParams {
+  importe: number;
+  nombre: string;
+  ci?: string;
+  refCorriente?: string;
+}
+
+export async function buscarPendientes(params: BuscarPendientesParams) {
+  const where: Prisma.TransferenciaWhereInput = {
+    importe: params.importe,
+    nombreOrdenante: { contains: params.nombre, mode: 'insensitive' },
+    codigoConfirmacion: null,
+  };
+
+  if (params.ci) where.ciOrdenante = { contains: params.ci, mode: 'insensitive' };
+  if (params.refCorriente) where.refCorriente = { contains: params.refCorriente, mode: 'insensitive' };
+
+  return prisma.transferencia.findMany({
+    where,
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    take: 20,
+  });
+}
+
+export async function confirmarTransferencia(id: number) {
+  const transfer = await prisma.transferencia.findUnique({ where: { id } });
+  if (!transfer) throw new Error('Transferencia no encontrada');
+  if (transfer.codigoConfirmacion) throw new Error('Transferencia ya confirmada');
+
+  const codigo = `GT-${generateCode()}`;
+
+  return prisma.transferencia.update({
+    where: { id },
+    data: {
+      codigoConfirmacion: codigo,
+      confirmedAt: new Date(),
+    },
+  });
+}
+
+export async function buscarPorCodigo(codigo: string) {
+  return prisma.transferencia.findUnique({
+    where: { codigoConfirmacion: codigo },
+  });
 }

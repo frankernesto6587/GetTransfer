@@ -6,6 +6,7 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { transferenciaRoutes } from './routes/transferencias';
+import { confirmarRoutes } from './routes/confirmar';
 import { prisma } from '../db/repository';
 
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
@@ -26,6 +27,7 @@ async function main() {
   await app.register(swaggerUi, { routePrefix: '/docs' });
 
   await app.register(transferenciaRoutes);
+  await app.register(confirmarRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
