@@ -1,5 +1,69 @@
-import { Search } from 'lucide-react'
+import { useState } from 'react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table'
+import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import type { Transferencia } from '../types'
+
+const col = createColumnHelper<Transferencia>()
+
+const columns = [
+  col.accessor('fecha', {
+    header: 'Fecha',
+    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+  }),
+  col.accessor('refOrigen', {
+    header: 'Ref Origen',
+    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+  }),
+  col.accessor('refCorriente', {
+    header: 'Ref Destino',
+    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+  }),
+  col.accessor('nombreOrdenante', {
+    header: 'Ordenante',
+    cell: (info) => <span className="text-white">{info.getValue() || '—'}</span>,
+  }),
+  col.accessor('ciOrdenante', {
+    header: 'CI',
+    cell: (info) => <span className="font-mono text-secondary">{info.getValue() || '—'}</span>,
+  }),
+  col.accessor('canalEmision', {
+    header: 'Canal',
+    cell: (info) => {
+      const canal = info.getValue()
+      if (!canal) return null
+      const colors: Record<string, string> = {
+        TRANSFERMOVIL: 'bg-emerald-500/15 text-emerald-400',
+        ENZONA: 'bg-blue-500/15 text-blue-400',
+        ATM: 'bg-amber-500/15 text-amber-400',
+      }
+      const key = canal.toUpperCase()
+      const colorClass =
+        Object.entries(colors).find(([k]) => key.includes(k))?.[1] ??
+        'bg-white/10 text-secondary'
+      return (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
+          {canal}
+        </span>
+      )
+    },
+  }),
+  col.accessor('importe', {
+    header: 'Importe',
+    cell: (info) => (
+      <span className="font-mono text-white">
+        ${info.getValue().toLocaleString('es-CU', { minimumFractionDigits: 2 })}
+      </span>
+    ),
+    meta: { align: 'right' },
+  }),
+]
 
 interface TransferTableProps {
   data: Transferencia[]
@@ -7,32 +71,22 @@ interface TransferTableProps {
   onSearchChange: (value: string) => void
 }
 
-function canalBadge(canal: string) {
-  if (!canal) return null
-
-  const colors: Record<string, string> = {
-    TRANSFERMOVIL: 'bg-emerald-500/15 text-emerald-400',
-    ENZONA: 'bg-blue-500/15 text-blue-400',
-    ATM: 'bg-amber-500/15 text-amber-400',
-  }
-
-  const key = canal.toUpperCase()
-  const colorClass =
-    Object.entries(colors).find(([k]) => key.includes(k))?.[1] ??
-    'bg-white/10 text-secondary'
-
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
-      {canal}
-    </span>
-  )
-}
-
 export function TransferTable({
   data,
   search,
   onSearchChange,
 }: TransferTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([])
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
+
   return (
     <div className="rounded-xl border border-border bg-surface">
       {/* Header */}
@@ -59,62 +113,54 @@ export function TransferTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border">
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Fecha
-              </th>
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Ref Origen
-              </th>
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Ref Destino
-              </th>
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Ordenante
-              </th>
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                CI
-              </th>
-              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Canal
-              </th>
-              <th className="text-right text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
-                Importe
-              </th>
-            </tr>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="border-b border-border">
+                {headerGroup.headers.map((header) => {
+                  const align = (header.column.columnDef.meta as { align?: string } | undefined)?.align === 'right' ? 'text-right' : 'text-left'
+                  const canSort = header.column.getCanSort()
+                  const sorted = header.column.getIsSorted()
+
+                  return (
+                    <th
+                      key={header.id}
+                      onClick={header.column.getToggleSortingHandler()}
+                      className={`${align} text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3 ${canSort ? 'cursor-pointer select-none hover:text-secondary transition-colors' : ''}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {canSort ? (
+                          sorted === 'asc' ? <ArrowUp size={12} className="text-gold" /> :
+                          sorted === 'desc' ? <ArrowDown size={12} className="text-gold" /> :
+                          <ArrowUpDown size={12} className="opacity-30" />
+                        ) : null}
+                      </span>
+                    </th>
+                  )
+                })}
+              </tr>
+            ))}
           </thead>
           <tbody>
-            {data.length === 0 ? (
+            {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-secondary">
+                <td colSpan={columns.length} className="text-center py-12 text-secondary">
                   No se encontraron transferencias
                 </td>
               </tr>
             ) : (
-              data.map((t) => (
+              table.getRowModel().rows.map((row) => (
                 <tr
-                  key={t.id}
+                  key={row.id}
                   className="border-b border-border/50 hover:bg-white/[0.02] transition-colors"
                 >
-                  <td className="px-6 py-3 font-mono text-secondary">
-                    {t.fecha}
-                  </td>
-                  <td className="px-6 py-3 font-mono text-secondary">
-                    {t.refOrigen}
-                  </td>
-                  <td className="px-6 py-3 font-mono text-secondary">
-                    {t.refCorriente}
-                  </td>
-                  <td className="px-6 py-3 text-white">
-                    {t.nombreOrdenante || '—'}
-                  </td>
-                  <td className="px-6 py-3 font-mono text-secondary">
-                    {t.ciOrdenante || '—'}
-                  </td>
-                  <td className="px-6 py-3">{canalBadge(t.canalEmision)}</td>
-                  <td className="px-6 py-3 text-right font-mono text-white">
-                    ${t.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}
-                  </td>
+                  {row.getVisibleCells().map((cell) => {
+                    const align = (cell.column.columnDef.meta as { align?: string } | undefined)?.align === 'right' ? 'text-right' : ''
+                    return (
+                      <td key={cell.id} className={`px-6 py-3 ${align}`}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))
             )}
