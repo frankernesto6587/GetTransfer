@@ -4,8 +4,8 @@ import * as repo from '../../db/repository';
 
 const buscarSchema = z.object({
   importe: z.number().optional(),
-  nombre: z.string().min(1).optional(),
-  ci: z.string().min(1).optional(),
+  nombre: z.string().min(6, 'El nombre debe tener al menos 6 caracteres').optional(),
+  ci: z.string().regex(/^\d{11}$/, 'El CI debe ser exactamente 11 digitos').optional(),
   refCorriente: z.string().min(1).optional(),
 }).refine(
   (d) => {

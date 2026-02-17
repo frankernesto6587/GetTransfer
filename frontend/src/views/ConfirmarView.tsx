@@ -36,8 +36,8 @@ export function ConfirmarView() {
   // - ci + importe (+ optional refCorriente)
   const canSearch = useMemo(() => {
     const hasRef = refCorriente.trim().length > 0
-    const hasNombre = nombre.trim().length > 0
-    const hasCi = ci.trim().length > 0
+    const hasNombre = nombre.trim().length >= 6
+    const hasCi = /^\d{11}$/.test(ci.trim())
     const hasImporte = importe.length > 0
     return hasRef || (hasNombre && hasImporte) || (hasCi && hasImporte)
   }, [refCorriente, nombre, ci, importe])
@@ -230,7 +230,7 @@ export function ConfirmarView() {
                 <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Nombre</label>
                 <input
                   type="text"
-                  placeholder="Nombre del ordenante"
+                  placeholder="Nombre del ordenante (min. 6 caracteres)"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
@@ -240,9 +240,11 @@ export function ConfirmarView() {
                 <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">CI</label>
                 <input
                   type="text"
-                  placeholder="Carnet de identidad"
+                  inputMode="numeric"
+                  maxLength={11}
+                  placeholder="11 digitos"
                   value={ci}
-                  onChange={(e) => setCi(e.target.value)}
+                  onChange={(e) => setCi(e.target.value.replace(/\D/g, '').slice(0, 11))}
                   className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
                 />
               </div>
