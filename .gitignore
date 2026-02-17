@@ -4,3 +4,6 @@ dist/
 screenshots/
 pnpm-lock.yaml
 data/
+*.png
+*.jpeg
+.playwright-mcp/
