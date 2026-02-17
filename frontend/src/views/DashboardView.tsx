@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   ArrowLeftRight,
   DollarSign,
@@ -33,9 +33,10 @@ export function DashboardView() {
     }
   }, [])
 
-  const { data: transferencias, isLoading: loadingTransferencias } = useQuery(
-    transferenciasQuery({ page, limit: 20, nombre: debouncedSearch || undefined }),
-  )
+  const { data: transferencias, isLoading: loadingTransferencias, isFetching: fetchingTransferencias } = useQuery({
+    ...transferenciasQuery({ page, limit: 20, nombre: debouncedSearch || undefined }),
+    placeholderData: keepPreviousData,
+  })
 
   const { data: resumen, isLoading: loadingResumen } = useQuery(resumenQuery())
 
@@ -98,7 +99,7 @@ export function DashboardView() {
         <DailyChart data={resumen?.porDia ?? []} />
       </div>
 
-      <div className="mb-4">
+      <div className={`mb-4 transition-opacity duration-150 ${fetchingTransferencias ? 'opacity-50' : ''}`}>
         <TransferTable
           data={transferencias?.data ?? []}
           search={search}

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { TransferTable } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
 import { transferenciasQuery } from '../lib/api'
@@ -28,8 +28,8 @@ export function TransferenciasView() {
     }
   }, [])
 
-  const { data: transferencias, isLoading } = useQuery(
-    transferenciasQuery({
+  const { data: transferencias, isLoading, isFetching } = useQuery({
+    ...transferenciasQuery({
       page,
       limit: 50,
       nombre: debouncedSearch || undefined,
@@ -37,7 +37,8 @@ export function TransferenciasView() {
       desde: desde ? Number(desde) : undefined,
       hasta: hasta ? Number(hasta) : undefined,
     }),
-  )
+    placeholderData: keepPreviousData,
+  })
 
   return (
     <div className="p-8 max-w-[1400px]">
@@ -86,7 +87,7 @@ export function TransferenciasView() {
         </div>
       ) : (
         <>
-          <div className="mb-4">
+          <div className={`mb-4 transition-opacity duration-150 ${isFetching ? 'opacity-50' : ''}`}>
             <TransferTable
               data={transferencias?.data ?? []}
               search={search}
