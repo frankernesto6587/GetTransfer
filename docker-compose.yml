@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gettransfer-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gettransfer
+      POSTGRES_PASSWORD: gettransfer123
+      POSTGRES_DB: gettransfer
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gettransfer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

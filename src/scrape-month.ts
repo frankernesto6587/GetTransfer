@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { getMatrixValue } from './scraper/matrix';
 import { TransferenciaEntrada, parseOperacionRow } from './scraper/parser';
+import { upsertMany, prisma } from './db/repository';
 
 dotenv.config();
 
@@ -270,9 +271,19 @@ async function main() {
     fs.writeFileSync(csvPath, [csvHeader, ...csvRows].join('\n'), 'utf-8');
     console.log(`CSV: ${csvPath}`);
 
+    // Guardar en base de datos
+    try {
+      const { total, nuevas } = await upsertMany(allTransfers);
+      console.log(`\nBD: ${nuevas} nuevas de ${total} totales (${total - nuevas} ya existían)`);
+    } catch (dbErr: any) {
+      console.log(`\nBD: No se pudo guardar (${dbErr.message?.substring(0, 80)})`);
+      console.log('   Asegúrate de que PostgreSQL esté corriendo: docker compose up -d');
+    }
+
   } catch (error) {
     console.error('Error fatal:', error);
   } finally {
+    await prisma.$disconnect();
     await browser.close();
   }
 }

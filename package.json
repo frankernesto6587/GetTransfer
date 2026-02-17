@@ -7,15 +7,28 @@
     "start": "ts-node src/index.ts",
     "start:headless": "ts-node src/index.ts --headless",
     "scrape:month": "ts-node src/scrape-month.ts",
-    "scrape:month:headless": "ts-node src/scrape-month.ts --headless"
+    "scrape:month:headless": "ts-node src/scrape-month.ts --headless",
+    "dev": "ts-node src/api/server.ts",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.29.2",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
+    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/client": "^7.4.0",
     "dotenv": "^17.3.1",
-    "playwright": "^1.58.2"
+    "fastify": "^5.7.4",
+    "playwright": "^1.58.2",
+    "prisma": "^7.4.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

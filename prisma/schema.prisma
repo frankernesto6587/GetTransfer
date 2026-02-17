@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Transferencia {
+  id                  Int      @id @default(autoincrement())
+  fecha               String
+  refCorriente        String
+  refOrigen           String   @unique
+  importe             Float
+  tipo                String
+  nombreOrdenante     String   @default("")
+  ciOrdenante         String   @default("")
+  tarjetaOrdenante    String   @default("")
+  cuentaOrdenante     String   @default("")
+  idCubacel           String   @default("")
+  telefonoOrdenante   String   @default("")
+  canalEmision        String   @default("")
+  sucursalOrdenante   String   @default("")
+  numDebito           String   @default("")
+  tipoServicio        String   @default("")
+  fechaFactura        String   @default("")
+  formato             String   @default("desconocido")
+  observacionesRaw    String   @default("")
+  createdAt           DateTime @default(now())
+
+  @@index([fecha])
+  @@index([nombreOrdenante])
+  @@index([importe])
+}
