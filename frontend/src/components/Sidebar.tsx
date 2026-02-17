@@ -7,15 +7,22 @@ import {
   User,
 } from 'lucide-react'
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', active: true },
-  { icon: ArrowLeftRight, label: 'Transferencias', active: false },
-  { icon: BarChart3, label: 'Reportes', active: false },
-  { icon: Settings, label: 'Configuración', active: false },
-  { icon: HelpCircle, label: 'Ayuda', active: false },
+export type View = 'dashboard' | 'transferencias' | 'reportes' | 'configuracion' | 'ayuda'
+
+const navItems: { icon: typeof LayoutDashboard; label: string; view: View }[] = [
+  { icon: LayoutDashboard, label: 'Dashboard', view: 'dashboard' },
+  { icon: ArrowLeftRight, label: 'Transferencias', view: 'transferencias' },
+  { icon: BarChart3, label: 'Reportes', view: 'reportes' },
+  { icon: Settings, label: 'Configuración', view: 'configuracion' },
+  { icon: HelpCircle, label: 'Ayuda', view: 'ayuda' },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  active: View
+  onNavigate: (view: View) => void
+}
+
+export function Sidebar({ active, onNavigate }: SidebarProps) {
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-[260px] bg-surface border-r border-border flex flex-col">
       {/* Logo */}
@@ -32,9 +39,10 @@ export function Sidebar() {
       <nav className="flex-1 px-3 mt-4">
         {navItems.map((item) => (
           <button
-            key={item.label}
+            key={item.view}
+            onClick={() => onNavigate(item.view)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors text-sm ${
-              item.active
+              active === item.view
                 ? 'bg-gold-dim text-gold'
                 : 'text-secondary hover:text-white hover:bg-white/5'
             }`}
