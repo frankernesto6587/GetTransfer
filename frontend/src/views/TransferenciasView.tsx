@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { TransferTable } from '../components/TransferTable'
+import { TransferTable, type SortingState } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
 import { transferenciasQuery } from '../lib/api'
 
@@ -11,6 +11,7 @@ export function TransferenciasView() {
   const [fecha, setFecha] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [sorting, setSorting] = useState<SortingState>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const handleSearchChange = useCallback((value: string) => {
@@ -28,6 +29,7 @@ export function TransferenciasView() {
     }
   }, [])
 
+  const sort = sorting[0]
   const { data: transferencias, isLoading, isFetching } = useQuery({
     ...transferenciasQuery({
       page,
@@ -36,6 +38,8 @@ export function TransferenciasView() {
       fecha: fecha || undefined,
       desde: desde ? Number(desde) : undefined,
       hasta: hasta ? Number(hasta) : undefined,
+      orderBy: sort?.id,
+      orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
     placeholderData: keepPreviousData,
   })
@@ -92,6 +96,8 @@ export function TransferenciasView() {
               data={transferencias?.data ?? []}
               search={search}
               onSearchChange={handleSearchChange}
+              sorting={sorting}
+              onSortingChange={(s) => { setSorting(s); setPage(1) }}
             />
           </div>
 

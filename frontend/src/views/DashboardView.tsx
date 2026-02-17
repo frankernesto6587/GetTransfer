@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { MetricCard } from '../components/MetricCard'
 import { DailyChart } from '../components/DailyChart'
-import { TransferTable } from '../components/TransferTable'
+import { TransferTable, type SortingState } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
 import { transferenciasQuery, resumenQuery } from '../lib/api'
 
@@ -16,6 +16,7 @@ export function DashboardView() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sorting, setSorting] = useState<SortingState>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   const handleSearchChange = useCallback((value: string) => {
@@ -33,8 +34,15 @@ export function DashboardView() {
     }
   }, [])
 
+  const sort = sorting[0]
   const { data: transferencias, isLoading: loadingTransferencias, isFetching: fetchingTransferencias } = useQuery({
-    ...transferenciasQuery({ page, limit: 20, nombre: debouncedSearch || undefined }),
+    ...transferenciasQuery({
+      page,
+      limit: 20,
+      nombre: debouncedSearch || undefined,
+      orderBy: sort?.id,
+      orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+    }),
     placeholderData: keepPreviousData,
   })
 
@@ -104,6 +112,8 @@ export function DashboardView() {
           data={transferencias?.data ?? []}
           search={search}
           onSearchChange={handleSearchChange}
+          sorting={sorting}
+          onSortingChange={(s) => { setSorting(s); setPage(1) }}
         />
       </div>
 

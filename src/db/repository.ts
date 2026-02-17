@@ -7,6 +7,9 @@ const prisma = new PrismaClient({ adapter });
 
 export { prisma };
 
+const sortableColumns = ['fecha', 'importe', 'nombreOrdenante', 'canalEmision', 'refOrigen', 'refCorriente', 'ciOrdenante'] as const;
+type SortableColumn = typeof sortableColumns[number];
+
 export interface TransferenciaFilters {
   fecha?: string;
   nombre?: string;
@@ -14,6 +17,8 @@ export interface TransferenciaFilters {
   hasta?: number;
   page?: number;
   limit?: number;
+  orderBy?: string;
+  orderDir?: 'asc' | 'desc';
 }
 
 export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ total: number; nuevas: number }> {
@@ -45,7 +50,7 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
-  const { fecha, nombre, desde, hasta, page = 1, limit = 50 } = filters;
+  const { fecha, nombre, desde, hasta, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
 
   const where: Prisma.TransferenciaWhereInput = {};
 
@@ -60,7 +65,9 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   const [data, total] = await Promise.all([
     prisma.transferencia.findMany({
       where,
-      orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+      orderBy: orderBy && sortableColumns.includes(orderBy as SortableColumn)
+        ? [{ [orderBy]: orderDir }, { id: 'desc' }]
+        : [{ fecha: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
     }),

@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
-  getSortedRowModel,
   flexRender,
   createColumnHelper,
   type SortingState,
@@ -69,22 +67,30 @@ interface TransferTableProps {
   data: Transferencia[]
   search: string
   onSearchChange: (value: string) => void
+  sorting: SortingState
+  onSortingChange: (sorting: SortingState) => void
 }
+
+export type { SortingState }
 
 export function TransferTable({
   data,
   search,
   onSearchChange,
+  sorting,
+  onSortingChange,
 }: TransferTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([])
 
   const table = useReactTable({
     data,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(sorting) : updater
+      onSortingChange(next)
+    },
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    manualSorting: true,
   })
 
   return (

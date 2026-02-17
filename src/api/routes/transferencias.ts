@@ -9,6 +9,8 @@ const querySchema = z.object({
   hasta: z.coerce.number().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(50),
+  orderBy: z.string().optional(),
+  orderDir: z.enum(['asc', 'desc']).optional(),
 });
 
 export async function transferenciaRoutes(app: FastifyInstance) {

@@ -13,6 +13,8 @@ export interface TransferenciasParams {
   fecha?: string
   desde?: number
   hasta?: number
+  orderBy?: string
+  orderDir?: 'asc' | 'desc'
 }
 
 export function buildTransferenciasUrl(params: TransferenciasParams): string {
@@ -23,6 +25,8 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   if (params.fecha) sp.set('fecha', params.fecha)
   if (params.desde) sp.set('desde', String(params.desde))
   if (params.hasta) sp.set('hasta', String(params.hasta))
+  if (params.orderBy) sp.set('orderBy', params.orderBy)
+  if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
   return `/api/transferencias${qs ? `?${qs}` : ''}`
 }
