@@ -118,7 +118,7 @@ export function ConfirmarView() {
   }
 
   return (
-    <div className="p-8 w-full">
+    <div className="p-8 max-w-[900px]">
       <div className="mb-8">
         <h1 className="font-headline text-3xl font-bold text-white">Confirmar Transferencia</h1>
         <p className="text-secondary mt-1">Buscar y confirmar transferencias pendientes</p>
