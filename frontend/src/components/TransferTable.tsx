@@ -67,7 +67,13 @@ export function TransferTable({
                 Ref Origen
               </th>
               <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
+                Ref Destino
+              </th>
+              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
                 Ordenante
+              </th>
+              <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
+                CI
               </th>
               <th className="text-left text-xs font-medium text-tertiary uppercase tracking-wider px-6 py-3">
                 Canal
@@ -80,7 +86,7 @@ export function TransferTable({
           <tbody>
             {data.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-12 text-secondary">
+                <td colSpan={7} className="text-center py-12 text-secondary">
                   No se encontraron transferencias
                 </td>
               </tr>
@@ -96,8 +102,14 @@ export function TransferTable({
                   <td className="px-6 py-3 font-mono text-secondary">
                     {t.refOrigen}
                   </td>
+                  <td className="px-6 py-3 font-mono text-secondary">
+                    {t.refCorriente}
+                  </td>
                   <td className="px-6 py-3 text-white">
                     {t.nombreOrdenante || '—'}
+                  </td>
+                  <td className="px-6 py-3 font-mono text-secondary">
+                    {t.ciOrdenante || '—'}
                   </td>
                   <td className="px-6 py-3">{canalBadge(t.canalEmision)}</td>
                   <td className="px-6 py-3 text-right font-mono text-white">
