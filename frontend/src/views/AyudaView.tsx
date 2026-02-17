@@ -30,7 +30,7 @@ const sections = [
 
 export function AyudaView() {
   return (
-    <div className="p-8 max-w-[1400px]">
+    <div className="p-8">
       <div className="mb-8">
         <h1 className="font-headline text-3xl font-bold text-white">Ayuda</h1>
         <p className="text-secondary mt-1">Referencia rápida de comandos y uso</p>

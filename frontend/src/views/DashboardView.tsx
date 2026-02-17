@@ -72,7 +72,7 @@ export function DashboardView() {
   )
 
   return (
-    <div className="p-8 max-w-[1400px]">
+    <div className="p-8">
       <div className="mb-8">
         <h1 className="font-headline text-3xl font-bold text-white">Dashboard</h1>
         <p className="text-secondary mt-1">Resumen de transferencias BANDEC</p>

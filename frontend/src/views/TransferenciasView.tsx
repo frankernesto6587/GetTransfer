@@ -45,7 +45,7 @@ export function TransferenciasView() {
   })
 
   return (
-    <div className="p-8 max-w-[1400px]">
+    <div className="p-8">
       <div className="mb-8">
         <h1 className="font-headline text-3xl font-bold text-white">Transferencias</h1>
         <p className="text-secondary mt-1">Listado completo con filtros avanzados</p>

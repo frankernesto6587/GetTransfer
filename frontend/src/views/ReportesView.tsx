@@ -25,7 +25,7 @@ export function ReportesView() {
   const topImporte = [...porDia].sort((a, b) => b.total - a.total).slice(0, 5)
 
   return (
-    <div className="p-8 max-w-[1400px]">
+    <div className="p-8">
       <div className="mb-8">
         <h1 className="font-headline text-3xl font-bold text-white">Reportes</h1>
         <p className="text-secondary mt-1">Análisis detallado de transferencias</p>
