@@ -10,7 +10,7 @@ const prisma = new PrismaClient({ adapter });
 
 export { prisma };
 
-const sortableColumns = ['fecha', 'importe', 'nombreOrdenante', 'canalEmision', 'refOrigen', 'refCorriente', 'ciOrdenante'] as const;
+const sortableColumns = ['fecha', 'importe', 'nombreOrdenante', 'canalEmision', 'refOrigen', 'refCorriente', 'ciOrdenante', 'cuentaOrdenante', 'confirmedAt'] as const;
 type SortableColumn = typeof sortableColumns[number];
 
 export interface TransferenciaFilters {

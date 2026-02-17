@@ -31,6 +31,10 @@ const columns = [
     header: 'CI',
     cell: (info) => <span className="font-mono text-secondary">{info.getValue() || '—'}</span>,
   }),
+  col.accessor('cuentaOrdenante', {
+    header: 'Cuenta',
+    cell: (info) => <span className="font-mono text-secondary text-xs">{info.getValue() || '—'}</span>,
+  }),
   col.accessor('canalEmision', {
     header: 'Canal',
     cell: (info) => {
@@ -73,6 +77,20 @@ const columns = [
       ) : (
         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
           Pendiente
+        </span>
+      )
+    },
+  }),
+  col.accessor('confirmedAt', {
+    header: 'Confirmado',
+    cell: (info) => {
+      const val = info.getValue()
+      if (!val) return <span className="text-tertiary">—</span>
+      const d = new Date(val)
+      return (
+        <span className="font-mono text-secondary text-xs">
+          {d.toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit' })}{' '}
+          {d.toLocaleTimeString('es-CU', { hour: '2-digit', minute: '2-digit' })}
         </span>
       )
     },
