@@ -169,15 +169,90 @@ export async function login(options: LoginOptions) {
       console.log('  ERROR: No se encontraron campos pin/matriz');
     }
 
-    // === Resultado ===
+    // === Verificar login ===
     const currentUrl = page.url();
-    const pageText = await page.$eval('body', (el) => el.innerText.substring(0, 500));
-    console.log(`\n=== Resultado ===`);
-    console.log(`URL: ${currentUrl}`);
-    console.log(`Texto:\n${pageText}`);
-
     const loginOk = !currentUrl.includes('Autenticacion') && !currentUrl.includes('Matriz');
     console.log(`\nLogin exitoso: ${loginOk ? 'SI' : 'NO'}`);
+
+    if (!loginOk) {
+      const pageText = await page.$eval('body', (el) => el.innerText.substring(0, 500));
+      console.log(`Texto:\n${pageText}`);
+      await keepOpen(page, headed);
+      return { browser, context, page };
+    }
+
+    // === Navegar a Operaciones Diarias ===
+    console.log('\n[4] Navegando a Operaciones Diarias...');
+    const opDiariasLink = await page.$('a:has-text("Operaciones Diarias")');
+
+    if (!opDiariasLink) {
+      console.log('  No se encontro link "Operaciones Diarias".');
+      await keepOpen(page, headed);
+      return { browser, context, page };
+    }
+
+    await opDiariasLink.click();
+    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await screenshot(page, '06-operaciones-diarias.png');
+
+    // === Consultar créditos (transferencias de entrada) de cuenta 0659834001469612 ===
+    console.log('\n[5] Consultando creditos de cuenta 0659834001469612...');
+
+    // cuenta_input es el campo visible, cuenta es el hidden que se envía
+    // Llenar el visible y forzar el valor del hidden via JS
+    const cuentaInput = await page.$('input[name="cuenta_input"]');
+    if (cuentaInput) {
+      await cuentaInput.click();
+      await cuentaInput.fill('0659834001469612');
+      // Esperar por si hay autocomplete/dropdown
+      await page.waitForTimeout(500);
+      // Intentar seleccionar del dropdown si aparece
+      const dropdownOption = await page.$('li:has-text("0659834001469612"), option:has-text("0659834001469612"), .ui-menu-item:has-text("0659"), a:has-text("0659")');
+      if (dropdownOption) {
+        console.log('  Seleccionando cuenta del dropdown...');
+        await dropdownOption.click();
+        await page.waitForTimeout(500);
+      } else {
+        // Forzar el valor en el campo hidden
+        await page.$eval('#cuenta', (el, val) => { (el as HTMLInputElement).value = val; }, '0659834001469612');
+        console.log('  Cuenta forzada en campo hidden.');
+      }
+    }
+
+    // Seleccionar "Créditos" (transferencias de entrada)
+    await page.check('#creditos');
+
+    await screenshot(page, '07-filtros-listos.png');
+
+    // Click Aceptar
+    const aceptarBtn = await page.$('input[value="Aceptar" i], button:has-text("Aceptar"), input[type="submit"]');
+    if (aceptarBtn) {
+      await aceptarBtn.click();
+      console.log('  Consulta enviada!');
+    }
+
+    await page.waitForTimeout(3000);
+    await page.waitForLoadState('networkidle').catch(() => {});
+
+    await logPageInfo(page);
+    await screenshot(page, '08-resultado-operaciones.png');
+
+    // Mostrar el contenido completo
+    const resultText = await page.$eval('body', (el) => el.innerText);
+    console.log(`\n=== Resultado Operaciones Diarias ===`);
+    console.log(resultText);
+
+    // Intentar capturar tabla de resultados
+    const tables = await page.$$('table');
+    if (tables.length > 0) {
+      console.log(`\n  Se encontraron ${tables.length} tabla(s).`);
+      for (let i = 0; i < tables.length; i++) {
+        const tableHTML = await tables[i].innerHTML();
+        console.log(`\n  --- Tabla ${i + 1} (HTML) ---`);
+        console.log(tableHTML);
+      }
+    }
 
     await keepOpen(page, headed);
     return { browser, context, page };
