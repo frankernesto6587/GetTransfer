@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, CheckCircle, Printer, AlertCircle } from 'lucide-react'
+import { Search, CheckCircle, Printer, AlertCircle, HelpCircle } from 'lucide-react'
 import { buscarPendientes, confirmarTransferencia } from '../lib/api'
 import type { Transferencia } from '../types'
 
@@ -30,9 +30,21 @@ export function ConfirmarView() {
     },
   })
 
+  // Valid search combinations:
+  // - refCorriente alone
+  // - nombre + importe (+ optional ci, refCorriente)
+  // - ci + importe (+ optional refCorriente)
+  const canSearch = useMemo(() => {
+    const hasRef = refCorriente.trim().length > 0
+    const hasNombre = nombre.trim().length > 0
+    const hasCi = ci.trim().length > 0
+    const hasImporte = importe.length > 0
+    return hasRef || (hasNombre && hasImporte) || (hasCi && hasImporte)
+  }, [refCorriente, nombre, ci, importe])
+
   const handleBuscar = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!importe || !nombre.trim()) return
+    if (!canSearch) return
 
     setSearching(true)
     setSearchError('')
@@ -41,8 +53,8 @@ export function ConfirmarView() {
 
     try {
       const data = await buscarPendientes({
-        importe: Number(importe),
-        nombre: nombre.trim(),
+        importe: importe ? Number(importe) : undefined,
+        nombre: nombre.trim() || undefined,
         ci: ci.trim() || undefined,
         refCorriente: refCorriente.trim() || undefined,
       })
@@ -204,11 +216,10 @@ export function ConfirmarView() {
             <h3 className="font-headline text-lg font-semibold text-white mb-4">Datos del cliente</h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Importe *</label>
+                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Importe</label>
                 <input
                   type="number"
                   step="0.01"
-                  required
                   placeholder="Monto transferido"
                   value={importe}
                   onChange={(e) => setImporte(e.target.value)}
@@ -216,10 +227,9 @@ export function ConfirmarView() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Nombre *</label>
+                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Nombre</label>
                 <input
                   type="text"
-                  required
                   placeholder="Nombre del ordenante"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
@@ -227,7 +237,7 @@ export function ConfirmarView() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">CI (opcional)</label>
+                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">CI</label>
                 <input
                   type="text"
                   placeholder="Carnet de identidad"
@@ -237,7 +247,7 @@ export function ConfirmarView() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Ref Destino (opcional)</label>
+                <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Ref Destino</label>
                 <input
                   type="text"
                   placeholder="Referencia destino"
@@ -249,13 +259,44 @@ export function ConfirmarView() {
             </div>
             <button
               type="submit"
-              disabled={searching || !importe || !nombre.trim()}
+              disabled={searching || !canSearch}
               className="flex items-center gap-2 px-5 py-2.5 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <Search size={16} />
               {searching ? 'Buscando...' : 'Buscar Transferencia'}
             </button>
           </form>
+
+          {/* Ayuda de parametros */}
+          <div className="rounded-xl border border-border bg-surface/50 p-5 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <HelpCircle size={16} className="text-tertiary" />
+              <h4 className="text-sm font-medium text-secondary">Combinaciones de busqueda</h4>
+            </div>
+            <div className="grid grid-cols-1 gap-2 text-sm">
+              <div className="flex items-start gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <span className="text-gold font-mono text-xs mt-0.5 shrink-0">1</span>
+                <div>
+                  <span className="text-white">Nombre + Importe</span>
+                  <span className="text-tertiary ml-2">— Busqueda principal. CI y Ref Destino opcionales para refinar.</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <span className="text-gold font-mono text-xs mt-0.5 shrink-0">2</span>
+                <div>
+                  <span className="text-white">CI + Importe</span>
+                  <span className="text-tertiary ml-2">— Cuando el cliente no recuerda el nombre exacto.</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <span className="text-gold font-mono text-xs mt-0.5 shrink-0">3</span>
+                <div>
+                  <span className="text-white">Ref Destino</span>
+                  <span className="text-tertiary ml-2">— Sola, sin otros campos. Busqueda directa por referencia.</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Error */}
           {searchError ? (

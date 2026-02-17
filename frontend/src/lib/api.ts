@@ -45,8 +45,8 @@ export const resumenQuery = () => ({
 })
 
 export interface BuscarConfirmacionParams {
-  importe: number
-  nombre: string
+  importe?: number
+  nombre?: string
   ci?: string
   refCorriente?: string
 }

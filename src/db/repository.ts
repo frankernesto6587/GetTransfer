@@ -119,19 +119,19 @@ export async function getResumen() {
 }
 
 export interface BuscarPendientesParams {
-  importe: number;
-  nombre: string;
+  importe?: number;
+  nombre?: string;
   ci?: string;
   refCorriente?: string;
 }
 
 export async function buscarPendientes(params: BuscarPendientesParams) {
   const where: Prisma.TransferenciaWhereInput = {
-    importe: params.importe,
-    nombreOrdenante: { contains: params.nombre, mode: 'insensitive' },
     codigoConfirmacion: null,
   };
 
+  if (params.importe) where.importe = params.importe;
+  if (params.nombre) where.nombreOrdenante = { contains: params.nombre, mode: 'insensitive' };
   if (params.ci) where.ciOrdenante = { contains: params.ci, mode: 'insensitive' };
   if (params.refCorriente) where.refCorriente = { contains: params.refCorriente, mode: 'insensitive' };
 

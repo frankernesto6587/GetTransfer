@@ -3,11 +3,21 @@ import { z } from 'zod';
 import * as repo from '../../db/repository';
 
 const buscarSchema = z.object({
-  importe: z.number(),
-  nombre: z.string().min(1),
-  ci: z.string().optional(),
-  refCorriente: z.string().optional(),
-});
+  importe: z.number().optional(),
+  nombre: z.string().min(1).optional(),
+  ci: z.string().min(1).optional(),
+  refCorriente: z.string().min(1).optional(),
+}).refine(
+  (d) => {
+    // nombre requires importe
+    if (d.nombre && !d.importe) return false;
+    // ci requires importe
+    if (d.ci && !d.refCorriente && !d.importe) return false;
+    // at least one search param
+    return !!(d.refCorriente || (d.nombre && d.importe) || (d.ci && d.importe));
+  },
+  { message: 'Combinacion de parametros invalida' },
+);
 
 const idSchema = z.object({
   id: z.coerce.number().int().min(1),
