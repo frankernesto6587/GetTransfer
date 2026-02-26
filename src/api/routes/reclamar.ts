@@ -64,4 +64,33 @@ export async function reclamarRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: message });
     }
   });
+
+  // Verify a transfer is still claimed (used by POS before validateOrder)
+  app.get('/api/reclamar/:codigo/verificar', async (request, reply) => {
+    const parsed = codigoSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Codigo invalido' });
+    }
+    const transfer = await repo.buscarPorCodigo(parsed.data.codigo);
+    if (!transfer) return reply.status(404).send({ error: 'Codigo no encontrado' });
+    if (!transfer.claimedAt) return reply.status(409).send({ error: 'Transferencia no esta reclamada' });
+    return { ok: true, claimedAt: transfer.claimedAt, claimedBy: transfer.claimedBy };
+  });
+
+  // Release a claimed transfer (clears claimedAt + claimedBy)
+  app.post('/api/reclamar/:codigo/liberar', async (request, reply) => {
+    const parsed = codigoSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Codigo invalido' });
+    }
+    try {
+      const result = await repo.liberarTransferencia(parsed.data.codigo);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      if (message.includes('no encontrado')) return reply.status(404).send({ error: message });
+      if (message.includes('no esta reclamada')) return reply.status(409).send({ error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
 }

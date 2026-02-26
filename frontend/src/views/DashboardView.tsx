@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   ArrowLeftRight,
   DollarSign,
@@ -13,6 +13,7 @@ import { Pagination } from '../components/Pagination'
 import { transferenciasQuery, resumenQuery } from '../lib/api'
 
 export function DashboardView() {
+  const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -114,6 +115,7 @@ export function DashboardView() {
           onSearchChange={handleSearchChange}
           sorting={sorting}
           onSortingChange={(s) => { setSorting(s); setPage(1) }}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['transferencias'] })}
         />
       </div>
 

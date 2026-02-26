@@ -189,6 +189,21 @@ export async function reclamarTransferencia(codigo: string, odooRef: string) {
   });
 }
 
+export async function liberarTransferencia(codigo: string) {
+  const transfer = await prisma.transferencia.findUnique({
+    where: { codigoConfirmacion: codigo },
+  });
+  if (!transfer) throw new Error('Codigo no encontrado');
+  if (!transfer.claimedAt) throw new Error('Esta transferencia no esta reclamada');
+  return prisma.transferencia.update({
+    where: { id: transfer.id },
+    data: {
+      claimedAt: null,
+      claimedBy: null,
+    },
+  });
+}
+
 // ── ApiToken ──
 
 export async function getActiveToken() {

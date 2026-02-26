@@ -66,4 +66,21 @@ export async function confirmarRoutes(app: FastifyInstance) {
     }
     return transfer;
   });
+
+  // Release a claimed transfer (admin dashboard, no token required)
+  app.post('/api/confirmar/:codigo/liberar', async (request, reply) => {
+    const parsed = codigoSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Codigo invalido' });
+    }
+    try {
+      const result = await repo.liberarTransferencia(parsed.data.codigo);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      if (message.includes('no encontrado')) return reply.status(404).send({ error: message });
+      if (message.includes('no esta reclamada')) return reply.status(409).send({ error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
 }

@@ -6,8 +6,9 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Eye, X } from 'lucide-react'
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, Unlock } from 'lucide-react'
 import type { Transferencia } from '../types'
+import { liberarTransferencia } from '../lib/api'
 
 function formatDate(val: string | null) {
   if (!val) return '—'
@@ -46,7 +47,26 @@ function DetailRow({ label, value, mono }: { label: string; value: string | null
   )
 }
 
-function TransferDetailModal({ transfer, onClose }: { transfer: Transferencia; onClose: () => void }) {
+function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer: Transferencia; onClose: () => void; onRefresh?: () => void }) {
+  const [confirmLiberar, setConfirmLiberar] = useState(false)
+  const [liberando, setLiberando] = useState(false)
+  const [liberarError, setLiberarError] = useState('')
+
+  const handleLiberar = async () => {
+    if (!transfer.codigoConfirmacion) return
+    setLiberando(true)
+    setLiberarError('')
+    try {
+      await liberarTransferencia(transfer.codigoConfirmacion)
+      onRefresh?.()
+      onClose()
+    } catch (err) {
+      setLiberarError(err instanceof Error ? err.message : 'Error al liberar')
+    } finally {
+      setLiberando(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -132,6 +152,43 @@ function TransferDetailModal({ transfer, onClose }: { transfer: Transferencia; o
               <DetailRow label="Ref Odoo" value={transfer.claimedBy} mono />
             </div>
           </div>
+
+          {/* Liberar button - only when claimed */}
+          {transfer.claimedAt && (
+            <div className="pt-2">
+              {liberarError && (
+                <div className="text-red-400 text-sm mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                  {liberarError}
+                </div>
+              )}
+              {confirmLiberar ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-red-400">Liberar esta transferencia? Podra ser reclamada nuevamente.</span>
+                  <button
+                    onClick={handleLiberar}
+                    disabled={liberando}
+                    className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm cursor-pointer disabled:opacity-40"
+                  >
+                    {liberando ? 'Liberando...' : 'Confirmar'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmLiberar(false)}
+                    className="px-3 py-1.5 bg-white/5 text-secondary rounded-lg hover:bg-white/10 transition-colors text-sm cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmLiberar(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer text-sm w-full justify-center"
+                >
+                  <Unlock size={14} />
+                  Liberar Transferencia
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -224,6 +281,7 @@ interface TransferTableProps {
   onSearchChange: (value: string) => void
   sorting: SortingState
   onSortingChange: (sorting: SortingState) => void
+  onRefresh?: () => void
 }
 
 export type { SortingState }
@@ -234,6 +292,7 @@ export function TransferTable({
   onSearchChange,
   sorting,
   onSortingChange,
+  onRefresh,
 }: TransferTableProps) {
   const [selected, setSelected] = useState<Transferencia | null>(null)
 
@@ -333,7 +392,7 @@ export function TransferTable({
       </div>
 
       {/* Detail Modal */}
-      {selected ? <TransferDetailModal transfer={selected} onClose={() => setSelected(null)} /> : null}
+      {selected ? <TransferDetailModal transfer={selected} onClose={() => setSelected(null)} onRefresh={onRefresh} /> : null}
     </div>
   )
 }

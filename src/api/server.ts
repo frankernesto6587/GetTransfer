@@ -16,7 +16,7 @@ const PORT = parseInt(process.env.API_PORT || '3000', 10);
 async function main() {
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: true });
+  await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] });
   await app.register(swagger, {
     openapi: {
       info: {

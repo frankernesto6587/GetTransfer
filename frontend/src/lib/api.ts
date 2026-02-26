@@ -71,6 +71,15 @@ export async function confirmarTransferencia(id: number): Promise<Transferencia>
   return res.json()
 }
 
+export async function liberarTransferencia(codigo: string): Promise<Transferencia> {
+  const res = await fetch(`/api/confirmar/${encodeURIComponent(codigo)}/liberar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 // ── Token API ──
 
 export async function getActiveToken(): Promise<{ token: ApiToken | null }> {

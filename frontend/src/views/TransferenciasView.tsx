@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { TransferTable, type SortingState } from '../components/TransferTable'
 import { Pagination } from '../components/Pagination'
 import { transferenciasQuery } from '../lib/api'
 
 export function TransferenciasView() {
+  const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -98,6 +99,7 @@ export function TransferenciasView() {
               onSearchChange={handleSearchChange}
               sorting={sorting}
               onSortingChange={(s) => { setSorting(s); setPage(1) }}
+              onRefresh={() => queryClient.invalidateQueries({ queryKey: ['transferencias'] })}
             />
           </div>
 

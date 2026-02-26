@@ -210,6 +210,67 @@ Nota: Si regenera el token en GetTransfer, debera actualizarlo aqui tambien.
 
 ---
 
+## Parte 2b: Claim/Unclaim seguro (cancelacion de linea de pago)
+
+### Problema
+Cuando un cajero reclama una transferencia desde el popup de Odoo POS y luego cancela la linea de pago, la transferencia queda bloqueada como "reclamada" sin poder reutilizarse. Con multiples POS y codigos dados con anticipacion, esto es un riesgo de fraude o bloqueo operativo.
+
+### Solucion: Flujo claim/unclaim
+
+1. Cajero busca codigo → `GET /api/reclamar/:codigo` (solo lectura, valida disponibilidad)
+2. Cajero confirma en popup → `POST /api/reclamar/:codigo` (marca claimedAt + claimedBy)
+3. Si quiere cancelar → boton "Cancelar GT" llama `DELETE /api/reclamar/:codigo` → si API OK, elimina linea
+4. Si DELETE falla → error, linea se mantiene (no se puede cancelar sin liberar)
+5. Orden se valida → transferencia queda reclamada definitivamente
+6. Caso extremo (POS se cae) → admin libera desde dashboard GetTransfer
+
+### Nuevo endpoint
+
+#### DELETE /api/reclamar/:codigo
+- Busca transferencia por codigo de confirmacion
+- Valida que exista y este actualmente reclamada (claimedAt != null)
+- Limpia claimedAt y claimedBy (pone ambos en null)
+- Respuesta: transferencia actualizada
+- Errores:
+  - 401: Token invalido
+  - 404: Codigo no encontrado
+  - 409: "Esta transferencia no esta reclamada"
+
+### Cambios en POS (Odoo)
+
+- **PaymentScreenExtension.js**: metodo `_cancelGetTransferPayment(paymentLine)` que:
+  - Llama `DELETE /api/reclamar/:codigo` con Bearer token
+  - Si OK → `order.remove_paymentline(paymentLine)`
+  - Si falla → notificacion de error, linea se mantiene
+- **Boton "Cancelar GT"**: visible solo en lineas de pago con `gt_codigo`
+- **Boton delete estandar**: deshabilitado/oculto para lineas GT (fuerza uso de "Cancelar GT")
+
+### Dashboard GetTransfer (admin)
+
+- En el modal de detalle de transferencia, si `claimedAt != null`:
+  - Boton "Liberar Transferencia" (rojo) con confirmacion
+  - Llama `DELETE /api/reclamar/:codigo` (sin token, es endpoint interno del dashboard)
+  - Refresca la tabla despues de liberar
+
+### Tabla de errores (cancelacion)
+| Momento       | Error                    | Mensaje                                                    |
+|---------------|--------------------------|------------------------------------------------------------|
+| Cancelar GT   | API no accesible         | "No se puede conectar al servidor GetTransfer"             |
+| Cancelar GT   | Token invalido           | "Token de autenticacion invalido"                          |
+| Cancelar GT   | No esta reclamada        | "Esta transferencia no esta reclamada"                     |
+| Cancelar GT   | Codigo no encontrado     | "Codigo no encontrado"                                     |
+| Cancelar GT   | Error de red             | "No se puede conectar al servidor. La linea se mantiene."  |
+
+### Verificacion
+1. Buscar codigo → confirmar → linea aparece con monto
+2. Click "Cancelar GT" → API libera → linea se elimina
+3. Red caida al cancelar → error, linea se mantiene
+4. POS se cae → admin libera desde dashboard
+5. Dos POS buscan mismo codigo → primero reclama, segundo ve "ya reclamada"
+6. Validar orden → transferencia permanece reclamada
+
+---
+
 ## Parte 3: Flujo completo
 
 ### Preparacion (una sola vez)
@@ -249,15 +310,15 @@ Nota: Si regenera el token en GetTransfer, debera actualizarlo aqui tambien.
 | Archivo | Accion |
 |---|---|
 | `prisma/schema.prisma` | Agregar claimedAt, claimedBy a Transferencia + modelo ApiToken |
-| `src/db/repository.ts` | Funciones: reclamarTransferencia, buscarParaReclamar, CRUD de ApiToken |
-| `src/api/routes/reclamar.ts` | Nuevos endpoints GET/POST /api/reclamar/* |
+| `src/db/repository.ts` | Funciones: reclamarTransferencia, buscarParaReclamar, liberarTransferencia, CRUD de ApiToken |
+| `src/api/routes/reclamar.ts` | Endpoints GET/POST/DELETE /api/reclamar/* |
 | `src/api/routes/token.ts` | Endpoints CRUD para gestion de tokens |
 | `src/api/middleware/auth.ts` | Middleware Bearer token |
 | `src/api/server.ts` | Registrar nuevas rutas + middleware |
 | `frontend/src/views/ConfigView.tsx` | Nueva vista de configuracion con gestion de token |
 | `frontend/src/App.tsx` | Agregar ruta Configuracion al sidebar |
-| `frontend/src/lib/api.ts` | Funciones API para token |
-| `frontend/src/components/TransferTable.tsx` | Columna "Reclamada" |
+| `frontend/src/lib/api.ts` | Funciones API para token + liberarTransferencia |
+| `frontend/src/components/TransferTable.tsx` | Columna "Reclamada" + boton "Liberar Transferencia" en modal |
 
 ### Odoo (pos_payment_methods_extended)
 | Archivo | Accion |
@@ -272,7 +333,7 @@ Nota: Si regenera el token en GetTransfer, debera actualizarlo aqui tambien.
 | `views/pos_payment_views.xml` | Accion y vistas para pagos GetTransfer |
 | `static/src/js/GetTransferPopup.js` | Popup del POS |
 | `static/src/xml/GetTransferPopup.xml` | Template del popup |
-| `static/src/js/PaymentScreenExtension.js` | Abrir popup al seleccionar GetTransfer |
+| `static/src/js/PaymentScreenExtension.js` | Abrir popup al seleccionar GetTransfer + cancelar GT (unclaim) |
 | `static/src/js/pos_payment_extension.js` | Serializar campos gt_* |
 | `static/src/js/payment_extension.js` | Export/import JSON de campos gt_* |
 | `static/src/css/pos_payment_extended.css` | Estilos del popup |
