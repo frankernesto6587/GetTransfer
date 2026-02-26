@@ -7,6 +7,8 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { transferenciaRoutes } from './routes/transferencias';
 import { confirmarRoutes } from './routes/confirmar';
+import { reclamarRoutes } from './routes/reclamar';
+import { tokenRoutes } from './routes/token';
 import { prisma } from '../db/repository';
 
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
@@ -28,6 +30,8 @@ async function main() {
 
   await app.register(transferenciaRoutes);
   await app.register(confirmarRoutes);
+  await app.register(reclamarRoutes);
+  await app.register(tokenRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 

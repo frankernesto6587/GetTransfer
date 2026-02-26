@@ -10,7 +10,7 @@ const prisma = new PrismaClient({ adapter });
 
 export { prisma };
 
-const sortableColumns = ['fecha', 'importe', 'nombreOrdenante', 'canalEmision', 'refOrigen', 'refCorriente', 'ciOrdenante', 'cuentaOrdenante', 'confirmedAt'] as const;
+const sortableColumns = ['fecha', 'importe', 'nombreOrdenante', 'canalEmision', 'refOrigen', 'refCorriente', 'ciOrdenante', 'cuentaOrdenante', 'confirmedAt', 'claimedAt'] as const;
 type SortableColumn = typeof sortableColumns[number];
 
 export interface TransferenciaFilters {
@@ -164,4 +164,51 @@ export async function buscarPorCodigo(codigo: string) {
   return prisma.transferencia.findUnique({
     where: { codigoConfirmacion: codigo },
   });
+}
+
+// ── Reclamar ──
+
+export async function buscarParaReclamar(codigo: string) {
+  const transfer = await prisma.transferencia.findUnique({
+    where: { codigoConfirmacion: codigo },
+  });
+  if (!transfer) throw new Error('Codigo no encontrado');
+  if (!transfer.codigoConfirmacion || !transfer.confirmedAt) throw new Error('Esta transferencia no ha sido confirmada');
+  if (transfer.claimedAt) throw new Error('Esta transferencia ya fue reclamada');
+  return transfer;
+}
+
+export async function reclamarTransferencia(codigo: string, odooRef: string) {
+  const transfer = await buscarParaReclamar(codigo);
+  return prisma.transferencia.update({
+    where: { id: transfer.id },
+    data: {
+      claimedAt: new Date(),
+      claimedBy: odooRef,
+    },
+  });
+}
+
+// ── ApiToken ──
+
+export async function getActiveToken() {
+  return prisma.apiToken.findFirst({ where: { active: true } });
+}
+
+export async function verifyToken(token: string) {
+  const found = await prisma.apiToken.findFirst({ where: { token, active: true } });
+  return !!found;
+}
+
+export async function generateToken(name: string = '') {
+  const { randomUUID } = await import('crypto');
+  // Deactivate any existing active tokens
+  await prisma.apiToken.updateMany({ where: { active: true }, data: { active: false } });
+  return prisma.apiToken.create({
+    data: { token: randomUUID(), name, active: true },
+  });
+}
+
+export async function deleteToken(id: number) {
+  return prisma.apiToken.delete({ where: { id } });
 }

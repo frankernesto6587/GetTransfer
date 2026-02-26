@@ -21,6 +21,16 @@ export interface Transferencia {
   createdAt: string
   codigoConfirmacion: string | null
   confirmedAt: string | null
+  claimedAt: string | null
+  claimedBy: string | null
+}
+
+export interface ApiToken {
+  id: number
+  token: string
+  name: string
+  active: boolean
+  createdAt: string
 }
 
 export interface PaginationInfo {

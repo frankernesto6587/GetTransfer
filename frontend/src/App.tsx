@@ -5,6 +5,7 @@ import { DashboardView } from './views/DashboardView'
 import { TransferenciasView } from './views/TransferenciasView'
 import { ConfirmarView } from './views/ConfirmarView'
 import { ReportesView } from './views/ReportesView'
+import { ConfigView } from './views/ConfigView'
 import { AyudaView } from './views/AyudaView'
 
 const views: Record<View, React.FC> = {
@@ -12,6 +13,7 @@ const views: Record<View, React.FC> = {
   transferencias: TransferenciasView,
   confirmar: ConfirmarView,
   reportes: ReportesView,
+  configuracion: ConfigView,
   ayuda: AyudaView,
 }
 

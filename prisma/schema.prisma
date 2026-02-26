@@ -31,7 +31,19 @@ model Transferencia {
   codigoConfirmacion  String?   @unique
   confirmedAt         DateTime?
 
+  claimedAt           DateTime?
+  claimedBy           String?
+
   @@index([fecha])
   @@index([nombreOrdenante])
   @@index([importe])
+  @@index([claimedAt])
+}
+
+model ApiToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  name      String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

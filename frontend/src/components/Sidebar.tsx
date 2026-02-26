@@ -4,16 +4,18 @@ import {
   BarChart3,
   ClipboardCheck,
   HelpCircle,
+  Settings,
   User,
 } from 'lucide-react'
 
-export type View = 'dashboard' | 'transferencias' | 'confirmar' | 'reportes' | 'ayuda'
+export type View = 'dashboard' | 'transferencias' | 'confirmar' | 'reportes' | 'configuracion' | 'ayuda'
 
 const navItems: { icon: typeof LayoutDashboard; label: string; view: View }[] = [
   { icon: LayoutDashboard, label: 'Dashboard', view: 'dashboard' },
   { icon: ArrowLeftRight, label: 'Transferencias', view: 'transferencias' },
   { icon: ClipboardCheck, label: 'Confirmar', view: 'confirmar' },
   { icon: BarChart3, label: 'Reportes', view: 'reportes' },
+  { icon: Settings, label: 'Configuracion', view: 'configuracion' },
   { icon: HelpCircle, label: 'Ayuda', view: 'ayuda' },
 ]
 

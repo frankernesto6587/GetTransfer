@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, Resumen } from '../types'
+import type { Transferencia, TransferenciasResponse, Resumen, ApiToken } from '../types'
 
 export const fetcher = <T>(url: string): Promise<T> =>
   fetch(url).then((r) => {
@@ -69,4 +69,27 @@ export async function confirmarTransferencia(id: number): Promise<Transferencia>
     throw new Error(body.error || `HTTP ${res.status}`)
   }
   return res.json()
+}
+
+// ── Token API ──
+
+export async function getActiveToken(): Promise<{ token: ApiToken | null }> {
+  const res = await fetch('/api/token')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function generateToken(name: string = ''): Promise<{ token: ApiToken }> {
+  const res = await fetch('/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function deleteToken(id: number): Promise<void> {
+  const res = await fetch(`/api/token/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }

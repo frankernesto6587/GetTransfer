@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -5,97 +6,217 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Eye, X } from 'lucide-react'
 import type { Transferencia } from '../types'
+
+function formatDate(val: string | null) {
+  if (!val) return '—'
+  const d = new Date(val)
+  return `${d.toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('es-CU', { hour: '2-digit', minute: '2-digit' })}`
+}
+
+function formatCurrency(amount: number) {
+  return `$${amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })}`
+}
+
+function CanalBadge({ canal }: { canal: string | null }) {
+  if (!canal) return <span className="text-tertiary">—</span>
+  const colors: Record<string, string> = {
+    TRANSFERMOVIL: 'bg-emerald-500/15 text-emerald-400',
+    ENZONA: 'bg-blue-500/15 text-blue-400',
+    ATM: 'bg-amber-500/15 text-amber-400',
+  }
+  const key = canal.toUpperCase()
+  const colorClass =
+    Object.entries(colors).find(([k]) => key.includes(k))?.[1] ??
+    'bg-white/10 text-secondary'
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
+      {canal}
+    </span>
+  )
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-b-0">
+      <span className="text-secondary text-sm">{label}</span>
+      <span className={`text-white text-sm ${mono ? 'font-mono' : ''}`}>{value || '—'}</span>
+    </div>
+  )
+}
+
+function TransferDetailModal({ transfer, onClose }: { transfer: Transferencia; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface border border-border rounded-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-surface rounded-t-2xl">
+          <div>
+            <h3 className="font-headline text-lg font-semibold text-white">Detalle de Transferencia</h3>
+            <span className="font-mono text-gold text-sm">{transfer.codigoConfirmacion || `#${transfer.id}`}</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-white/10 text-secondary hover:text-white transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-5">
+          {/* Importe destacado */}
+          <div className="text-center py-3 rounded-xl bg-gold/10 border border-gold/20">
+            <div className="text-tertiary text-xs uppercase tracking-wider mb-1">Importe</div>
+            <div className="font-mono text-2xl font-bold text-gold">{formatCurrency(transfer.importe)}</div>
+          </div>
+
+          {/* Ordenante */}
+          <div>
+            <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Datos del Ordenante</h4>
+            <div className="bg-page rounded-lg px-4 py-1">
+              <DetailRow label="Nombre" value={transfer.nombreOrdenante} />
+              <DetailRow label="CI" value={transfer.ciOrdenante} mono />
+              <DetailRow label="Cuenta" value={transfer.cuentaOrdenante} mono />
+              <DetailRow label="Tarjeta" value={transfer.tarjetaOrdenante} mono />
+              <DetailRow label="Teléfono" value={transfer.telefonoOrdenante} mono />
+              <DetailRow label="Sucursal" value={transfer.sucursalOrdenante} />
+            </div>
+          </div>
+
+          {/* Datos de la transferencia */}
+          <div>
+            <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Datos de la Transferencia</h4>
+            <div className="bg-page rounded-lg px-4 py-1">
+              <DetailRow label="Fecha" value={transfer.fecha} mono />
+              <DetailRow label="Ref Origen" value={transfer.refOrigen} mono />
+              <DetailRow label="Ref Corriente" value={transfer.refCorriente} mono />
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-secondary text-sm">Canal</span>
+                <CanalBadge canal={transfer.canalEmision} />
+              </div>
+              <DetailRow label="Tipo" value={transfer.tipo} />
+              <DetailRow label="Tipo Servicio" value={transfer.tipoServicio} />
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div>
+            <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Estado</h4>
+            <div className="bg-page rounded-lg px-4 py-1">
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-secondary text-sm">Código</span>
+                {transfer.codigoConfirmacion ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400 font-mono">
+                    {transfer.codigoConfirmacion}
+                  </span>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">Pendiente</span>
+                )}
+              </div>
+              <DetailRow label="Confirmado" value={formatDate(transfer.confirmedAt)} mono />
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-secondary text-sm">Reclamada</span>
+                {transfer.claimedAt ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-violet-500/15 text-violet-400 font-mono">
+                    {formatDate(transfer.claimedAt)}
+                  </span>
+                ) : (
+                  <span className="text-tertiary text-sm">—</span>
+                )}
+              </div>
+              <DetailRow label="Ref Odoo" value={transfer.claimedBy} mono />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const col = createColumnHelper<Transferencia>()
 
-const columns = [
-  col.accessor('fecha', {
-    header: 'Fecha',
-    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
-  }),
-  col.accessor('refOrigen', {
-    header: 'Ref Origen',
-    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
-  }),
-  col.accessor('refCorriente', {
-    header: 'Ref Destino',
-    cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
-  }),
-  col.accessor('nombreOrdenante', {
-    header: 'Ordenante',
-    cell: (info) => <span className="text-white">{info.getValue() || '—'}</span>,
-  }),
-  col.accessor('ciOrdenante', {
-    header: 'CI',
-    cell: (info) => <span className="font-mono text-secondary">{info.getValue() || '—'}</span>,
-  }),
-  col.accessor('cuentaOrdenante', {
-    header: 'Cuenta',
-    cell: (info) => <span className="font-mono text-secondary text-xs">{info.getValue() || '—'}</span>,
-  }),
-  col.accessor('canalEmision', {
-    header: 'Canal',
-    cell: (info) => {
-      const canal = info.getValue()
-      if (!canal) return null
-      const colors: Record<string, string> = {
-        TRANSFERMOVIL: 'bg-emerald-500/15 text-emerald-400',
-        ENZONA: 'bg-blue-500/15 text-blue-400',
-        ATM: 'bg-amber-500/15 text-amber-400',
-      }
-      const key = canal.toUpperCase()
-      const colorClass =
-        Object.entries(colors).find(([k]) => key.includes(k))?.[1] ??
-        'bg-white/10 text-secondary'
-      return (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
-          {canal}
+function makeColumns(onView: (t: Transferencia) => void) {
+  return [
+    col.accessor('fecha', {
+      header: 'Fecha',
+      cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+    }),
+    col.accessor('refOrigen', {
+      header: 'Ref Origen',
+      cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+    }),
+    col.accessor('refCorriente', {
+      header: 'Ref Destino',
+      cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+    }),
+    col.accessor('nombreOrdenante', {
+      header: 'Ordenante',
+      cell: (info) => <span className="text-white">{info.getValue() || '—'}</span>,
+    }),
+    col.accessor('canalEmision', {
+      header: 'Canal',
+      cell: (info) => <CanalBadge canal={info.getValue()} />,
+    }),
+    col.accessor('importe', {
+      header: 'Importe',
+      cell: (info) => (
+        <span className="font-mono text-white">
+          {formatCurrency(info.getValue())}
         </span>
-      )
-    },
-  }),
-  col.accessor('importe', {
-    header: 'Importe',
-    cell: (info) => (
-      <span className="font-mono text-white">
-        ${info.getValue().toLocaleString('es-CU', { minimumFractionDigits: 2 })}
-      </span>
-    ),
-    meta: { align: 'right' },
-  }),
-  col.accessor('codigoConfirmacion', {
-    header: 'Estado',
-    enableSorting: false,
-    cell: (info) => {
-      const codigo = info.getValue()
-      return codigo ? (
-        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400" title={codigo}>
-          {codigo}
-        </span>
-      ) : (
-        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
-          Pendiente
-        </span>
-      )
-    },
-  }),
-  col.accessor('confirmedAt', {
-    header: 'Confirmado',
-    cell: (info) => {
-      const val = info.getValue()
-      if (!val) return <span className="text-tertiary">—</span>
-      const d = new Date(val)
-      return (
-        <span className="font-mono text-secondary text-xs">
-          {d.toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit' })}{' '}
-          {d.toLocaleTimeString('es-CU', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-      )
-    },
-  }),
-]
+      ),
+      meta: { align: 'right' },
+    }),
+    col.accessor('codigoConfirmacion', {
+      header: 'Estado',
+      enableSorting: false,
+      cell: (info) => {
+        const codigo = info.getValue()
+        return codigo ? (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400" title={codigo}>
+            {codigo}
+          </span>
+        ) : (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
+            Pendiente
+          </span>
+        )
+      },
+    }),
+    col.accessor('claimedAt', {
+      header: 'Reclamada',
+      cell: (info) => {
+        const val = info.getValue()
+        const by = info.row.original.claimedBy
+        if (!val) return <span className="text-tertiary">—</span>
+        const d = new Date(val)
+        return (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-violet-500/15 text-violet-400 font-mono" title={by || ''}>
+            {d.toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit' })}{' '}
+            {d.toLocaleTimeString('es-CU', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )
+      },
+    }),
+    col.display({
+      id: 'actions',
+      header: '',
+      cell: (info) => (
+        <button
+          onClick={() => onView(info.row.original)}
+          className="p-1.5 rounded-lg hover:bg-gold/15 text-tertiary hover:text-gold transition-colors"
+          title="Ver detalle"
+        >
+          <Eye size={16} />
+        </button>
+      ),
+    }),
+  ]
+}
 
 interface TransferTableProps {
   data: Transferencia[]
@@ -114,6 +235,9 @@ export function TransferTable({
   sorting,
   onSortingChange,
 }: TransferTableProps) {
+  const [selected, setSelected] = useState<Transferencia | null>(null)
+
+  const columns = makeColumns(setSelected)
 
   const table = useReactTable({
     data,
@@ -207,6 +331,9 @@ export function TransferTable({
           </tbody>
         </table>
       </div>
+
+      {/* Detail Modal */}
+      {selected ? <TransferDetailModal transfer={selected} onClose={() => setSelected(null)} /> : null}
     </div>
   )
 }
