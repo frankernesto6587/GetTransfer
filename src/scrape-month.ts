@@ -129,6 +129,19 @@ async function main() {
       return;
     }
 
+    // Verificar conexión del banco antes de continuar
+    const fechaContable = await page.$eval(
+      'td:has-text("Fecha Contable en Banco")',
+      (el) => el.textContent || ''
+    ).catch(() => '');
+
+    if (fechaContable.includes('Sin Conexión')) {
+      console.log('BANCO SIN CONEXIÓN: El servidor del banco está apagado (fuera de horario o sin corriente).');
+      await browser.close();
+      return;
+    }
+    console.log(`Banco conectado: ${fechaContable.replace(/.*Fecha Contable en Banco:\s*/, '').replace(/\s*\|.*/, '').trim()}`);
+
     // Navegar a Operaciones Diarias UNA sola vez
     await page.click('a:has-text("Operaciones Diarias")');
     await page.waitForTimeout(1500);
@@ -211,7 +224,8 @@ async function main() {
     }
 
     console.log(`\n${'='.repeat(160)}`);
-    console.log(`TOTAL: ${allTransfers.length} transferencias de entrada en febrero ${year}`);
+    const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    console.log(`TOTAL: ${allTransfers.length} transferencias de entrada en ${monthNames[month - 1]} ${year}`);
     console.log(`${'='.repeat(160)}\n`);
 
     if (allTransfers.length > 0) {
@@ -254,7 +268,8 @@ async function main() {
     const outputPath = path.join(__dirname, '../data');
     if (!fs.existsSync(outputPath)) fs.mkdirSync(outputPath, { recursive: true });
 
-    const jsonPath = path.join(outputPath, `creditos-febrero-${year}.json`);
+    const monthStr = String(month).padStart(2, '0');
+    const jsonPath = path.join(outputPath, `creditos-${year}-${monthStr}.json`);
     fs.writeFileSync(jsonPath, JSON.stringify(allTransfers, null, 2), 'utf-8');
     console.log(`JSON: ${jsonPath}`);
 
@@ -267,7 +282,7 @@ async function main() {
         t.refCorriente, t.refOrigen,
       ].join(',')
     );
-    const csvPath = path.join(outputPath, `creditos-febrero-${year}.csv`);
+    const csvPath = path.join(outputPath, `creditos-${year}-${monthStr}.csv`);
     fs.writeFileSync(csvPath, [csvHeader, ...csvRows].join('\n'), 'utf-8');
     console.log(`CSV: ${csvPath}`);
 

@@ -4,6 +4,8 @@ import * as repo from '../../db/repository';
 
 const querySchema = z.object({
   fecha: z.string().optional(),
+  fechaDesde: z.string().optional(),
+  fechaHasta: z.string().optional(),
   nombre: z.string().optional(),
   desde: z.coerce.number().optional(),
   hasta: z.coerce.number().optional(),

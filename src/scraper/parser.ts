@@ -27,6 +27,17 @@ export interface TransferenciaEntrada {
   observacionesRaw: string;
 }
 
+/** Convert DD/MM/YY to YYYY-MM-DD */
+function convertFecha(fecha: string): string {
+  const parts = fecha.split('/');
+  if (parts.length === 3) {
+    const [dd, mm, yy] = parts;
+    const yyyy = yy.length === 2 ? `20${yy}` : yy;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  return fecha;
+}
+
 function extractField(text: string, pattern: RegExp): string {
   const match = text.match(pattern);
   return match ? match[1].trim() : '';
@@ -119,8 +130,11 @@ export function parseOperacionRow(cells: string[]): TransferenciaEntrada | null 
 
   const parsed = parseObservaciones(observaciones);
 
+  // Convert DD/MM/YY to YYYY-MM-DD for proper sorting
+  const fechaSortable = convertFecha(fecha);
+
   return {
-    fecha,
+    fecha: fechaSortable,
     refCorriente,
     refOrigen,
     importe: parseFloat(importe.replace(/,/g, '')) || 0,

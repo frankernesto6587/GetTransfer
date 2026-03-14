@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, Resumen, ApiToken } from '../types'
+import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo } from '../types'
 
 export const fetcher = <T>(url: string): Promise<T> =>
   fetch(url).then((r) => {
@@ -11,6 +11,8 @@ export interface TransferenciasParams {
   limit?: number
   nombre?: string
   fecha?: string
+  fechaDesde?: string
+  fechaHasta?: string
   desde?: number
   hasta?: number
   orderBy?: string
@@ -23,6 +25,8 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   if (params.limit) sp.set('limit', String(params.limit))
   if (params.nombre) sp.set('nombre', params.nombre)
   if (params.fecha) sp.set('fecha', params.fecha)
+  if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
+  if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   if (params.desde) sp.set('desde', String(params.desde))
   if (params.hasta) sp.set('hasta', String(params.hasta))
   if (params.orderBy) sp.set('orderBy', params.orderBy)
@@ -101,4 +105,72 @@ export async function generateToken(name: string = ''): Promise<{ token: ApiToke
 export async function deleteToken(id: number): Promise<void> {
   const res = await fetch(`/api/token/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+// ── Monitor API ──
+
+export async function getMonitorConfig(): Promise<MonitorConfig> {
+  const res = await fetch('/api/monitor/config')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function updateMonitorConfig(data: Partial<MonitorConfig>): Promise<MonitorConfig> {
+  const res = await fetch('/api/monitor/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function getMonitorStatus(): Promise<BankStatus> {
+  const res = await fetch('/api/monitor/status')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function forceCheck(): Promise<{ online: boolean; fecha_contable: string | null; message: string }> {
+  const res = await fetch('/api/monitor/check', { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function triggerScrape(month: number, year: number): Promise<ScrapeResult> {
+  const res = await fetch(`/api/scrape?month=${month}&year=${year}`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Webhook API ──
+
+export async function getWebhookInfo(): Promise<WebhookInfo> {
+  const res = await fetch('/api/monitor/webhook/info')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function registerWebhook(): Promise<{ ok: boolean; webhook_url?: string }> {
+  const res = await fetch('/api/monitor/webhook/register', { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function unregisterWebhook(): Promise<{ ok: boolean }> {
+  const res = await fetch('/api/monitor/webhook/unregister', { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
 }

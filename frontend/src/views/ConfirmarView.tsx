@@ -1,6 +1,12 @@
 import { useState, useRef, useMemo } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Search, CheckCircle, Printer, AlertCircle, HelpCircle } from 'lucide-react'
+
+/** YYYY-MM-DD → DD/MM/YYYY */
+function displayFecha(f: string) {
+  const m = f?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : f;
+}
 import { buscarPendientes, confirmarTransferencia } from '../lib/api'
 import type { Transferencia } from '../types'
 
@@ -155,7 +161,7 @@ export function ConfirmarView() {
             </div>
             <div>
               <span className="text-tertiary">Fecha</span>
-              <p className="text-white">{confirmada.fecha}</p>
+              <p className="text-white">{displayFecha(confirmada.fecha)}</p>
             </div>
             <div>
               <span className="text-tertiary">Canal</span>
@@ -196,7 +202,7 @@ export function ConfirmarView() {
               </div>
               <div className="code">{confirmada.codigoConfirmacion}</div>
               <div className="details">
-                <div className="row"><span className="label">Fecha:</span><span>{confirmada.fecha}</span></div>
+                <div className="row"><span className="label">Fecha:</span><span>{displayFecha(confirmada.fecha)}</span></div>
                 <div className="row"><span className="label">Ordenante:</span><span>{confirmada.nombreOrdenante}</span></div>
                 <div className="row"><span className="label">CI:</span><span>{confirmada.ciOrdenante || '—'}</span></div>
                 <div className="row"><span className="label">Importe:</span><span>${confirmada.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span></div>
@@ -358,7 +364,7 @@ export function ConfirmarView() {
                       <div className="flex-1 grid grid-cols-5 gap-4 text-sm">
                         <div>
                           <span className="text-tertiary text-xs block">Fecha</span>
-                          <span className="text-secondary font-mono">{t.fecha}</span>
+                          <span className="text-secondary font-mono">{displayFecha(t.fecha)}</span>
                         </div>
                         <div>
                           <span className="text-tertiary text-xs block">Ordenante</span>

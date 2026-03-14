@@ -47,3 +47,23 @@ model ApiToken {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
+
+model MonitorConfig {
+  id                 Int      @id @default(1)
+  enabled            Boolean  @default(true)
+  interval_minutes   Int      @default(5)
+  telegram_bot_token String?
+  telegram_chat_id   String?
+  telegram_topic_id  Int?
+  telegram_webhook_url String?
+  updatedAt          DateTime @updatedAt
+}
+
+model BankStatus {
+  id             Int       @id @default(1)
+  online         Boolean   @default(false)
+  last_check     DateTime?
+  last_online    DateTime?
+  fecha_contable String?
+  updatedAt      DateTime  @updatedAt
+}

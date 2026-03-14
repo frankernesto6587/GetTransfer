@@ -58,3 +58,33 @@ export interface Resumen {
     total: number
   }
 }
+
+export interface MonitorConfig {
+  enabled: boolean
+  interval_minutes: number
+  telegram_bot_token: string | null
+  telegram_chat_id: string | null
+  telegram_topic_id: number | null
+  telegram_webhook_url: string | null
+}
+
+export interface WebhookInfo {
+  registered: boolean
+  url: string | null
+  bot_username: string | null
+}
+
+export interface BankStatus {
+  online: boolean
+  last_check: string | null
+  last_online: string | null
+  fecha_contable: string | null
+}
+
+export interface ScrapeResult {
+  month: number
+  year: number
+  total: number
+  nuevas: number
+  message: string
+}

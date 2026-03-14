@@ -10,6 +10,12 @@ import { Search, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, Unlock } from 'lucide-
 import type { Transferencia } from '../types'
 import { liberarTransferencia } from '../lib/api'
 
+/** YYYY-MM-DD → DD/MM/YYYY */
+function displayFecha(f: string) {
+  const m = f?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : f
+}
+
 function formatDate(val: string | null) {
   if (!val) return '—'
   const d = new Date(val)
@@ -112,7 +118,7 @@ function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer: Trans
           <div>
             <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Datos de la Transferencia</h4>
             <div className="bg-page rounded-lg px-4 py-1">
-              <DetailRow label="Fecha" value={transfer.fecha} mono />
+              <DetailRow label="Fecha" value={displayFecha(transfer.fecha)} mono />
               <DetailRow label="Ref Origen" value={transfer.refOrigen} mono />
               <DetailRow label="Ref Corriente" value={transfer.refCorriente} mono />
               <div className="flex justify-between items-center py-2 border-b border-border/50">
@@ -201,7 +207,20 @@ function makeColumns(onView: (t: Transferencia) => void) {
   return [
     col.accessor('fecha', {
       header: 'Fecha',
-      cell: (info) => <span className="font-mono text-secondary">{info.getValue()}</span>,
+      cell: (info) => {
+        const v = info.getValue()
+        const m = v?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+        if (!m) return <span className="font-mono text-secondary">{v}</span>
+        const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
+        const day = parseInt(m[3]!)
+        const mon = months[parseInt(m[2]!) - 1]
+        return (
+          <span className="text-secondary text-xs">
+            <span className="font-mono font-medium text-white">{day}</span>{' '}
+            <span className="uppercase">{mon}</span>
+          </span>
+        )
+      },
     }),
     col.accessor('refOrigen', {
       header: 'Ref Origen',

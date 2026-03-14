@@ -9,7 +9,9 @@ import { transferenciaRoutes } from './routes/transferencias';
 import { confirmarRoutes } from './routes/confirmar';
 import { reclamarRoutes } from './routes/reclamar';
 import { tokenRoutes } from './routes/token';
+import { monitorRoutes } from './routes/monitor';
 import { prisma } from '../db/repository';
+import { monitorService } from '../monitor/monitor-service';
 
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
 
@@ -32,6 +34,7 @@ async function main() {
   await app.register(confirmarRoutes);
   await app.register(reclamarRoutes);
   await app.register(tokenRoutes);
+  await app.register(monitorRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
@@ -39,12 +42,19 @@ async function main() {
     await app.listen({ port: PORT, host: '0.0.0.0' });
     console.log(`API corriendo en http://localhost:${PORT}`);
     console.log(`Swagger docs en http://localhost:${PORT}/docs`);
+
+    // Start monitor service
+    monitorService.start().catch(err =>
+      console.error('[Monitor] Error al iniciar:', err.message)
+    );
+
   } catch (err) {
     app.log.error(err);
     process.exit(1);
   }
 
   const shutdown = async () => {
+    monitorService.stop();
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

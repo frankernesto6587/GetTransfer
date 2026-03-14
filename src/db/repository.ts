@@ -15,6 +15,8 @@ type SortableColumn = typeof sortableColumns[number];
 
 export interface TransferenciaFilters {
   fecha?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
   nombre?: string;
   desde?: number;
   hasta?: number;
@@ -53,11 +55,17 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
-  const { fecha, nombre, desde, hasta, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
+  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
 
   const where: Prisma.TransferenciaWhereInput = {};
 
-  if (fecha) where.fecha = fecha;
+  if (fecha) {
+    where.fecha = fecha;
+  } else if (fechaDesde || fechaHasta) {
+    where.fecha = {};
+    if (fechaDesde) where.fecha.gte = fechaDesde;
+    if (fechaHasta) where.fecha.lte = fechaHasta;
+  }
   if (nombre) where.nombreOrdenante = { contains: nombre, mode: 'insensitive' };
   if (desde !== undefined || hasta !== undefined) {
     where.importe = {};
@@ -226,4 +234,52 @@ export async function generateToken(name: string = '') {
 
 export async function deleteToken(id: number) {
   return prisma.apiToken.delete({ where: { id } });
+}
+
+// ── MonitorConfig ──
+
+export async function getMonitorConfig() {
+  return prisma.monitorConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1 },
+    update: {},
+  });
+}
+
+export async function updateMonitorConfig(data: {
+  enabled?: boolean;
+  interval_minutes?: number;
+  telegram_bot_token?: string | null;
+  telegram_chat_id?: string | null;
+  telegram_topic_id?: number | null;
+  telegram_webhook_url?: string | null;
+}) {
+  return prisma.monitorConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
+  });
+}
+
+// ── BankStatus ──
+
+export async function getBankStatus() {
+  return prisma.bankStatus.upsert({
+    where: { id: 1 },
+    create: { id: 1 },
+    update: {},
+  });
+}
+
+export async function updateBankStatus(data: {
+  online: boolean;
+  last_check: Date;
+  last_online?: Date | null;
+  fecha_contable?: string | null;
+}) {
+  return prisma.bankStatus.upsert({
+    where: { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
+  });
 }
