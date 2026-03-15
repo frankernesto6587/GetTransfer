@@ -88,3 +88,22 @@ export interface ScrapeResult {
   nuevas: number
   message: string
 }
+
+export type UserRole = 'root' | 'admin' | 'confirmer' | 'viewer'
+
+export interface User {
+  id: number
+  email: string
+  name: string
+  picture: string
+  role: UserRole
+}
+
+export interface Invitation {
+  id: number
+  email: string
+  role: string
+  invitedBy: number | null
+  usedAt: string | null
+  createdAt: string
+}

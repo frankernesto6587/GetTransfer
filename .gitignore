@@ -2,7 +2,6 @@ node_modules/
 dist/
 .env
 screenshots/
-pnpm-lock.yaml
 data/
 *.png
 *.jpeg

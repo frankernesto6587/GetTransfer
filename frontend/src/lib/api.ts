@@ -1,10 +1,24 @@
-import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo } from '../types'
+import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation } from '../types'
+
+// ── Base fetch helper with credentials + 401 handling ──
+
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, { credentials: 'include', ...init })
+  if (res.status === 401) {
+    // Session expired — reload to trigger login
+    window.location.href = '/'
+    throw new Error('Sesion expirada')
+  }
+  return res
+}
 
 export const fetcher = <T>(url: string): Promise<T> =>
-  fetch(url).then((r) => {
+  apiFetch(url).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     return r.json() as Promise<T>
   })
+
+// ── Transferencias ──
 
 export interface TransferenciasParams {
   page?: number
@@ -48,6 +62,8 @@ export const resumenQuery = () => ({
   queryFn: () => fetcher<Resumen>('/api/resumen'),
 })
 
+// ── Confirmar ──
+
 export interface BuscarConfirmacionParams {
   importe?: number
   nombre?: string
@@ -57,7 +73,7 @@ export interface BuscarConfirmacionParams {
 }
 
 export async function buscarPendientes(params: BuscarConfirmacionParams): Promise<Transferencia[]> {
-  const res = await fetch('/api/confirmar/buscar', {
+  const res = await apiFetch('/api/confirmar/buscar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -67,7 +83,7 @@ export async function buscarPendientes(params: BuscarConfirmacionParams): Promis
 }
 
 export async function confirmarTransferencia(id: number): Promise<Transferencia> {
-  const res = await fetch(`/api/confirmar/${id}`, { method: 'POST' })
+  const res = await apiFetch(`/api/confirmar/${id}`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -76,7 +92,7 @@ export async function confirmarTransferencia(id: number): Promise<Transferencia>
 }
 
 export async function liberarTransferencia(codigo: string): Promise<Transferencia> {
-  const res = await fetch(`/api/confirmar/${encodeURIComponent(codigo)}/liberar`, { method: 'POST' })
+  const res = await apiFetch(`/api/confirmar/${encodeURIComponent(codigo)}/liberar`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -87,13 +103,13 @@ export async function liberarTransferencia(codigo: string): Promise<Transferenci
 // ── Token API ──
 
 export async function getActiveToken(): Promise<{ token: ApiToken | null }> {
-  const res = await fetch('/api/token')
+  const res = await apiFetch('/api/token')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function generateToken(name: string = ''): Promise<{ token: ApiToken }> {
-  const res = await fetch('/api/token', {
+  const res = await apiFetch('/api/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -103,20 +119,20 @@ export async function generateToken(name: string = ''): Promise<{ token: ApiToke
 }
 
 export async function deleteToken(id: number): Promise<void> {
-  const res = await fetch(`/api/token/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`/api/token/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
 
 // ── Monitor API ──
 
 export async function getMonitorConfig(): Promise<MonitorConfig> {
-  const res = await fetch('/api/monitor/config')
+  const res = await apiFetch('/api/monitor/config')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function updateMonitorConfig(data: Partial<MonitorConfig>): Promise<MonitorConfig> {
-  const res = await fetch('/api/monitor/config', {
+  const res = await apiFetch('/api/monitor/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -126,13 +142,13 @@ export async function updateMonitorConfig(data: Partial<MonitorConfig>): Promise
 }
 
 export async function getMonitorStatus(): Promise<BankStatus> {
-  const res = await fetch('/api/monitor/status')
+  const res = await apiFetch('/api/monitor/status')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function forceCheck(): Promise<{ online: boolean; fecha_contable: string | null; message: string }> {
-  const res = await fetch('/api/monitor/check', { method: 'POST' })
+  const res = await apiFetch('/api/monitor/check', { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -141,7 +157,7 @@ export async function forceCheck(): Promise<{ online: boolean; fecha_contable: s
 }
 
 export async function triggerScrape(month: number, year: number): Promise<ScrapeResult> {
-  const res = await fetch(`/api/scrape?month=${month}&year=${year}`, { method: 'POST' })
+  const res = await apiFetch(`/api/scrape?month=${month}&year=${year}`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -152,13 +168,13 @@ export async function triggerScrape(month: number, year: number): Promise<Scrape
 // ── Webhook API ──
 
 export async function getWebhookInfo(): Promise<WebhookInfo> {
-  const res = await fetch('/api/monitor/webhook/info')
+  const res = await apiFetch('/api/monitor/webhook/info')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function registerWebhook(): Promise<{ ok: boolean; webhook_url?: string }> {
-  const res = await fetch('/api/monitor/webhook/register', { method: 'POST' })
+  const res = await apiFetch('/api/monitor/webhook/register', { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -167,10 +183,81 @@ export async function registerWebhook(): Promise<{ ok: boolean; webhook_url?: st
 }
 
 export async function unregisterWebhook(): Promise<{ ok: boolean }> {
-  const res = await fetch('/api/monitor/webhook/unregister', { method: 'POST' })
+  const res = await apiFetch('/api/monitor/webhook/unregister', { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
   }
   return res.json()
+}
+
+// ── Auth API ──
+
+export async function getMe(): Promise<User | null> {
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'include' })
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch('/api/auth/logout', { method: 'POST' })
+}
+
+// ── Users API ──
+
+export async function getUsers(): Promise<User[]> {
+  const res = await apiFetch('/api/users')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function updateUserRole(id: number, role: string): Promise<User> {
+  const res = await apiFetch(`/api/users/${id}/role`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function deactivateUser(id: number): Promise<void> {
+  const res = await apiFetch(`/api/users/${id}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+}
+
+// ── Invitations API ──
+
+export async function getInvitations(): Promise<Invitation[]> {
+  const res = await apiFetch('/api/invitations')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function createInvitation(email: string, role: string): Promise<Invitation> {
+  const res = await apiFetch('/api/invitations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function deleteInvitation(id: number): Promise<void> {
+  const res = await apiFetch(`/api/invitations/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }

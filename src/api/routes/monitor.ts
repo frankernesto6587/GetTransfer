@@ -3,6 +3,7 @@ import { getMonitorConfig, updateMonitorConfig, getBankStatus } from '../../db/r
 import { monitorService } from '../../monitor/monitor-service';
 import { handleWebhookUpdate, registerWebhook, unregisterWebhook, getWebhookInfo, getBotInfo } from '../../monitor/telegram-bot';
 import { sendNotification } from '../../monitor/telegram';
+import { requireRole } from '../middleware/auth';
 
 export async function monitorRoutes(fastify: FastifyInstance) {
   // GET /api/monitor/config
@@ -18,8 +19,8 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // PUT /api/monitor/config
-  fastify.put('/api/monitor/config', async (request, reply) => {
+  // PUT /api/monitor/config (admin only)
+  fastify.put('/api/monitor/config', { preHandler: requireRole('admin') }, async (request, reply) => {
     const body = request.body as {
       enabled?: boolean;
       interval_minutes?: number;
@@ -48,8 +49,8 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // POST /api/monitor/webhook/register — register webhook with Telegram
-  fastify.post('/api/monitor/webhook/register', async (request, reply) => {
+  // POST /api/monitor/webhook/register — register webhook with Telegram (admin only)
+  fastify.post('/api/monitor/webhook/register', { preHandler: requireRole('admin') }, async (request, reply) => {
     const config = await getMonitorConfig();
     if (!config.telegram_bot_token) {
       return reply.status(400).send({ error: 'Configura el bot token primero' });
@@ -72,8 +73,8 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     return { ok: true, webhook_url: webhookEndpoint, bot_username: botUsername };
   });
 
-  // POST /api/monitor/webhook/unregister — remove webhook from Telegram
-  fastify.post('/api/monitor/webhook/unregister', async (request, reply) => {
+  // POST /api/monitor/webhook/unregister — remove webhook from Telegram (admin only)
+  fastify.post('/api/monitor/webhook/unregister', { preHandler: requireRole('admin') }, async (request, reply) => {
     const config = await getMonitorConfig();
     if (!config.telegram_bot_token) {
       return reply.status(400).send({ error: 'Configura el bot token primero' });
@@ -128,14 +129,14 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // POST /api/monitor/check — force a manual check and notify via Telegram
-  fastify.post('/api/monitor/check', async (request, reply) => {
+  // POST /api/monitor/check — force a manual check (admin only)
+  fastify.post('/api/monitor/check', { preHandler: requireRole('admin') }, async (request, reply) => {
     const result = await monitorService.forceCheck();
     return result;
   });
 
-  // POST /api/scrape?month=X&year=Y
-  fastify.post('/api/scrape', async (request, reply) => {
+  // POST /api/scrape?month=X&year=Y (admin only)
+  fastify.post('/api/scrape', { preHandler: requireRole('admin') }, async (request, reply) => {
     const query = request.query as { month?: string; year?: string };
     const month = parseInt(query.month || '');
     const year = parseInt(query.year || '');

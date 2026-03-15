@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as repo from '../../db/repository';
+import { requireRole } from '../middleware/auth';
 
 const buscarSchema = z.object({
   importe: z.number().optional(),
@@ -31,6 +32,7 @@ const codigoSchema = z.object({
 });
 
 export async function confirmarRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', requireRole('admin', 'confirmer'));
   app.post('/api/confirmar/buscar', async (request, reply) => {
     const parsed = buscarSchema.safeParse(request.body);
     if (!parsed.success) {

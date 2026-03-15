@@ -1,12 +1,14 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as repo from '../../db/repository';
+import { requireRole } from '../middleware/auth';
 
 const generateSchema = z.object({
   name: z.string().optional().default(''),
 });
 
 export async function tokenRoutes(app: FastifyInstance) {
+  app.addHook('preHandler', requireRole('admin'));
   // Get active token
   app.get('/api/token', async () => {
     const token = await repo.getActiveToken();

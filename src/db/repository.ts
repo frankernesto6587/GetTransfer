@@ -283,3 +283,51 @@ export async function updateBankStatus(data: {
     update: data,
   });
 }
+
+// ── User ──
+
+export async function getUserByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email } });
+}
+
+export async function getUserById(id: number) {
+  return prisma.user.findUnique({ where: { id } });
+}
+
+export async function createUser(data: { email: string; name: string; picture: string; role: string }) {
+  return prisma.user.create({ data });
+}
+
+export async function getAllUsers() {
+  return prisma.user.findMany({ where: { active: true }, orderBy: { createdAt: 'desc' } });
+}
+
+export async function updateUser(id: number, data: { role?: string; active?: boolean; name?: string; picture?: string }) {
+  return prisma.user.update({ where: { id }, data });
+}
+
+export async function deactivateUser(id: number) {
+  return prisma.user.update({ where: { id }, data: { active: false } });
+}
+
+// ── Invitation ──
+
+export async function createInvitation(email: string, role: string, invitedBy: number) {
+  return prisma.invitation.create({ data: { email, role, invitedBy } });
+}
+
+export async function getInvitationByEmail(email: string) {
+  return prisma.invitation.findUnique({ where: { email } });
+}
+
+export async function markInvitationUsed(email: string) {
+  return prisma.invitation.update({ where: { email }, data: { usedAt: new Date() } });
+}
+
+export async function getAllInvitations() {
+  return prisma.invitation.findMany({ orderBy: { createdAt: 'desc' } });
+}
+
+export async function deleteInvitation(id: number) {
+  return prisma.invitation.delete({ where: { id } });
+}

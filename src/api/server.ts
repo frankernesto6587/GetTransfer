@@ -1,8 +1,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import path from 'path';
+import fs from 'fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
+import jwt from '@fastify/jwt';
+import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { transferenciaRoutes } from './routes/transferencias';
@@ -10,6 +15,9 @@ import { confirmarRoutes } from './routes/confirmar';
 import { reclamarRoutes } from './routes/reclamar';
 import { tokenRoutes } from './routes/token';
 import { monitorRoutes } from './routes/monitor';
+import { authRoutes } from './routes/auth';
+import { userRoutes } from './routes/users';
+import { jwtAuth } from './middleware/auth';
 import { prisma } from '../db/repository';
 import { monitorService } from '../monitor/monitor-service';
 
@@ -18,7 +26,17 @@ const PORT = parseInt(process.env.API_PORT || '3000', 10);
 async function main() {
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] });
+  // Plugins
+  await app.register(cors, {
+    origin: process.env.FRONTEND_URL || true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  });
+  await app.register(cookie);
+  await app.register(jwt, {
+    secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
+    cookie: { cookieName: 'gt_token', signed: false },
+  });
   await app.register(swagger, {
     openapi: {
       info: {
@@ -30,6 +48,12 @@ async function main() {
   });
   await app.register(swaggerUi, { routePrefix: '/docs' });
 
+  // Global auth hook
+  app.addHook('onRequest', jwtAuth);
+
+  // Routes
+  await app.register(authRoutes);
+  await app.register(userRoutes);
   await app.register(transferenciaRoutes);
   await app.register(confirmarRoutes);
   await app.register(reclamarRoutes);
@@ -37,6 +61,23 @@ async function main() {
   await app.register(monitorRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+
+  // Serve frontend static files in production
+  const distPath = path.join(__dirname, '../../frontend/dist');
+  if (fs.existsSync(distPath)) {
+    await app.register(fastifyStatic, {
+      root: distPath,
+      prefix: '/',
+      wildcard: false,
+    });
+    // SPA fallback: non-API routes serve index.html
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/')) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+  }
 
   try {
     await app.listen({ port: PORT, host: '0.0.0.0' });
