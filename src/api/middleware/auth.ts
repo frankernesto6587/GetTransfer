@@ -27,7 +27,9 @@ export async function bearerAuth(request: FastifyRequest, reply: FastifyReply) {
 // ── JWT cookie auth (global hook) ──
 
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/docs'];
-const PUBLIC_PATTERNS = [/^\/api\/monitor\/webhook\/[^/]+$/]; // Only /api/monitor/webhook/:token (Telegram incoming)
+// Telegram incoming webhook: token is a long bot token like "123456:ABC-DEF", never "register"/"unregister"/"info"
+const WEBHOOK_ADMIN_PATHS = new Set(['register', 'unregister', 'info']);
+
 const BEARER_PREFIXES = ['/api/reclamar'];
 
 export async function jwtAuth(request: FastifyRequest, reply: FastifyReply) {
@@ -35,7 +37,9 @@ export async function jwtAuth(request: FastifyRequest, reply: FastifyReply) {
 
   // Skip public routes (Google OAuth flow, health, docs, Telegram webhook incoming)
   if (PUBLIC_PREFIXES.some(p => path.startsWith(p))) return;
-  if (PUBLIC_PATTERNS.some(p => p.test(path))) return;
+  // Allow Telegram incoming webhook (bot token as path segment), but not admin paths
+  const webhookMatch = path.match(/^\/api\/monitor\/webhook\/(.+)$/);
+  if (webhookMatch && !WEBHOOK_ADMIN_PATHS.has(webhookMatch[1])) return;
   // Skip routes that use Bearer token auth
   if (BEARER_PREFIXES.some(p => path.startsWith(p))) return;
 
