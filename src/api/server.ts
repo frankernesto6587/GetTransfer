@@ -24,7 +24,17 @@ import { monitorService } from '../monitor/monitor-service';
 const PORT = parseInt(process.env.API_PORT || '3000', 10);
 
 async function main() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: {
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss',
+          ignore: 'pid,hostname',
+        },
+      },
+    },
+  });
 
   // Plugins
   await app.register(cors, {
