@@ -26,14 +26,16 @@ export async function bearerAuth(request: FastifyRequest, reply: FastifyReply) {
 
 // ── JWT cookie auth (global hook) ──
 
-const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/api/monitor/webhook/', '/docs'];
+const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/docs'];
+const PUBLIC_PATTERNS = [/^\/api\/monitor\/webhook\/[^/]+$/]; // Only /api/monitor/webhook/:token (Telegram incoming)
 const BEARER_PREFIXES = ['/api/reclamar'];
 
 export async function jwtAuth(request: FastifyRequest, reply: FastifyReply) {
   const path = request.url.split('?')[0];
 
-  // Skip public routes (Google OAuth flow, health, docs)
+  // Skip public routes (Google OAuth flow, health, docs, Telegram webhook incoming)
   if (PUBLIC_PREFIXES.some(p => path.startsWith(p))) return;
+  if (PUBLIC_PATTERNS.some(p => p.test(path))) return;
   // Skip routes that use Bearer token auth
   if (BEARER_PREFIXES.some(p => path.startsWith(p))) return;
 
