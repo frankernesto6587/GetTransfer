@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
-import { chromium, Page } from 'playwright';
+import { Page } from 'playwright';
 import path from 'path';
 import { getMatrixValue } from './scraper/matrix';
+import { launchBrowser } from './scraper/browser';
 
 dotenv.config();
 
@@ -11,7 +12,7 @@ function extractPinPositions(pin: string, pregpin: string): string {
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: false, slowMo: 200 });
+  const browser = await launchBrowser({ headless: false, slowMo: 200 });
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
 

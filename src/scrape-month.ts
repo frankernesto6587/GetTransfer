@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
-import { chromium, Page } from 'playwright';
+import { Page } from 'playwright';
+import { launchBrowser } from './scraper/browser';
 import path from 'path';
 import fs from 'fs';
 import { getMatrixValue } from './scraper/matrix';
@@ -110,7 +111,7 @@ function parseRows(rows: string[][]): TransferenciaEntrada[] {
 async function main() {
   const headed = !process.argv.includes('--headless');
 
-  const browser = await chromium.launch({
+  const browser = await launchBrowser({
     headless: !headed,
     slowMo: headed ? 50 : 0,
   });

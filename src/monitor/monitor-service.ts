@@ -1,7 +1,7 @@
-import { chromium } from 'playwright';
 import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany } from '../db/repository';
 import { sendNotification, TelegramConfig } from './telegram';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
+import { launchBrowser } from '../scraper/browser';
 
 class MonitorService {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -45,7 +45,7 @@ class MonitorService {
     }
 
     this.running = true;
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
 
     try {
       const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 800 } });
@@ -114,7 +114,7 @@ class MonitorService {
     }
 
     this.running = true;
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
 
     try {
       const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 800 } });
@@ -154,7 +154,7 @@ class MonitorService {
     }
 
     this.running = true;
-    const browser = await chromium.launch({ headless: true });
+    const browser = await launchBrowser({ headless: true });
 
     try {
       const config = await getMonitorConfig();

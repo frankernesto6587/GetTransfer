@@ -1,6 +1,7 @@
-import { chromium, Page } from 'playwright';
+import { Page } from 'playwright';
 import path from 'path';
 import { getMatrixValue } from './matrix';
+import { launchBrowser } from './browser';
 
 const SCREENSHOTS_DIR = path.join(__dirname, '../../screenshots');
 
@@ -59,7 +60,7 @@ export async function login(options: LoginOptions) {
   console.log(`\n=== BANDEC Virtual - Login ===`);
   console.log(`Navegando a: ${url}\n`);
 
-  const browser = await chromium.launch({
+  const browser = await launchBrowser({
     headless: !headed,
     slowMo: headed ? 300 : 50,
   });
