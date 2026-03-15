@@ -31,26 +31,28 @@ jobs:
       - name: Detect changes
         id: changes
         run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all")
-          echo "files=$CHANGED" >> $GITHUB_OUTPUT
+          CHANGED_FILE=$(mktemp)
+          git diff --name-only HEAD~1 HEAD > "$CHANGED_FILE" 2>/dev/null || echo "all" > "$CHANGED_FILE"
 
-          if echo "$CHANGED" | grep -qE '^(package\.json|pnpm-lock\.yaml)$'; then
+          if grep -qE '^(package\.json|pnpm-lock\.yaml)$' "$CHANGED_FILE"; then
             echo "deps=true" >> $GITHUB_OUTPUT
           else
             echo "deps=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE '^frontend/'; then
+          if grep -qE '^frontend/' "$CHANGED_FILE"; then
             echo "frontend=true" >> $GITHUB_OUTPUT
           else
             echo "frontend=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE '^(src/|prisma/|package\.json|ecosystem\.config\.js)'; then
+          if grep -qE '^(src/|prisma/|package\.json|ecosystem\.config\.js)' "$CHANGED_FILE"; then
             echo "backend=true" >> $GITHUB_OUTPUT
           else
             echo "backend=false" >> $GITHUB_OUTPUT
           fi
+
+          rm -f "$CHANGED_FILE"
         working-directory: ${{ github.workspace }}
 
       - name: Sync to deploy path
