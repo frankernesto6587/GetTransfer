@@ -1,0 +1,16 @@
+transfer.merxbit.com {
+    root * /home/cristian/gettransfer/frontend/dist
+
+    handle /api/* {
+        reverse_proxy localhost:3000
+    }
+
+    handle /docs {
+        reverse_proxy localhost:3000
+    }
+
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
+}

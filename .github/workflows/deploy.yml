@@ -1,0 +1,108 @@
+name: Deploy GetTransfer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'frontend/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'prisma/**'
+      - 'ecosystem.config.js'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, gettransfer]
+
+    defaults:
+      run:
+        working-directory: /home/cristian/gettransfer
+
+    env:
+      DEPLOY_PATH: /home/cristian/gettransfer
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changes
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all")
+          echo "files=$CHANGED" >> $GITHUB_OUTPUT
+
+          if echo "$CHANGED" | grep -qE '^(package\.json|pnpm-lock\.yaml)$'; then
+            echo "deps=true" >> $GITHUB_OUTPUT
+          else
+            echo "deps=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE '^frontend/'; then
+            echo "frontend=true" >> $GITHUB_OUTPUT
+          else
+            echo "frontend=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE '^(src/|prisma/|package\.json|ecosystem\.config\.js)'; then
+            echo "backend=true" >> $GITHUB_OUTPUT
+          else
+            echo "backend=false" >> $GITHUB_OUTPUT
+          fi
+        working-directory: ${{ github.workspace }}
+
+      - name: Sync to deploy path
+        run: |
+          rsync -a --delete \
+            --exclude='node_modules/' \
+            --exclude='frontend/node_modules/' \
+            --exclude='frontend/dist/' \
+            --exclude='.env' \
+            --exclude='data/' \
+            --exclude='dist/' \
+            --exclude='.git/' \
+            ${{ github.workspace }}/ ${{ env.DEPLOY_PATH }}/
+
+      - name: Install dependencies
+        if: steps.changes.outputs.deps == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm run db:generate
+
+      - name: Build backend
+        if: steps.changes.outputs.backend == 'true'
+        run: pnpm run build
+
+      - name: Build frontend
+        if: steps.changes.outputs.frontend == 'true'
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Ensure Playwright chromium
+        run: npx playwright install chromium 2>/dev/null || true
+
+      - name: Restart API
+        run: pm2 restart gettransfer || pm2 start ecosystem.config.js
+
+      - name: Health check
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, waiting 3s..."
+            sleep 3
+          done
+          echo "Health check failed after 5 attempts"
+          pm2 logs gettransfer --lines 30 --nostream
+          exit 1
+
+      - name: Reload Caddy
+        if: steps.changes.outputs.frontend == 'true'
+        run: sudo systemctl reload caddy
