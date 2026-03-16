@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   ArrowLeftRight,
   BarChart3,
-  ClipboardCheck,
   HelpCircle,
   Settings,
   Users,

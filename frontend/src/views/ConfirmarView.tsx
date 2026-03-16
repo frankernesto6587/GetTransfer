@@ -8,7 +8,7 @@ function displayFecha(f: string) {
   const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : f;
 }
-import { buscarPendientes, confirmarTransferencia } from '../lib/api'
+import { buscarPendientesGetCode, confirmarGetCode } from '../lib/api'
 import type { Transferencia } from '../types'
 
 export function ConfirmarView() {
@@ -30,7 +30,7 @@ export function ConfirmarView() {
   const receiptRef = useRef<HTMLDivElement>(null)
 
   const confirmarMut = useMutation({
-    mutationFn: confirmarTransferencia,
+    mutationFn: confirmarGetCode,
     onSuccess: (data) => {
       setConfirmada(data)
       setResults(null)
@@ -62,7 +62,7 @@ export function ConfirmarView() {
     setConfirmada(null)
 
     try {
-      const data = await buscarPendientes({
+      const data = await buscarPendientesGetCode({
         importe: importe ? Number(importe) : undefined,
         nombre: nombre.trim() || undefined,
         ci: ci.trim() || undefined,
