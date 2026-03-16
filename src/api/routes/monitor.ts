@@ -146,7 +146,7 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const { total, nuevas } = await monitorService.scrapeMonth(month, year);
+      const { total, nuevas, nuevasList } = await monitorService.scrapeMonth(month, year);
 
       // Notify via Telegram
       console.log(`[Scrape] Resultado: ${total} total, ${nuevas} nuevas`);
@@ -154,9 +154,17 @@ export async function monitorRoutes(fastify: FastifyInstance) {
       if (config.telegram_bot_token && config.telegram_chat_id) {
         const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
         const periodo = `${monthNames[month - 1]} ${year}`;
-        const msg = nuevas > 0
+        let msg = nuevas > 0
           ? `🆕 <b>Scraping ${periodo} completado</b>\n📊 ${total} transferencias, <b>${nuevas} nuevas</b>`
           : `📋 <b>Scraping ${periodo} completado</b>\n📊 ${total} transferencias, 0 nuevas`;
+        if (nuevasList.length > 0) {
+          const list = nuevasList.map(t => {
+            const parts = t.nombreOrdenante.split(/\s+/);
+            const nombre = parts.slice(0, 2).join(' ') || '???';
+            return `  $${t.importe.toLocaleString('es-CU')} - ${nombre}`;
+          }).join('\n');
+          msg += '\n' + list;
+        }
         await sendNotification({
           bot_token: config.telegram_bot_token,
           chat_id: config.telegram_chat_id,

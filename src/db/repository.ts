@@ -26,7 +26,15 @@ export interface TransferenciaFilters {
   orderDir?: 'asc' | 'desc';
 }
 
-export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ total: number; nuevas: number }> {
+export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaEntrada[] }> {
+  // Find which refOrigen already exist to identify truly new ones
+  const refs = transfers.map(t => t.refOrigen);
+  const existing = await prisma.transferencia.findMany({
+    where: { refOrigen: { in: refs } },
+    select: { refOrigen: true },
+  });
+  const existingRefs = new Set(existing.map(e => e.refOrigen));
+
   const result = await prisma.transferencia.createMany({
     data: transfers.map(t => ({
       fecha: t.fecha,
@@ -51,7 +59,8 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
     skipDuplicates: true,
   });
 
-  return { total: transfers.length, nuevas: result.count };
+  const nuevasList = transfers.filter(t => !existingRefs.has(t.refOrigen));
+  return { total: transfers.length, nuevas: result.count, nuevasList };
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {

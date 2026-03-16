@@ -3,6 +3,17 @@ import { sendNotification, TelegramConfig } from './telegram';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
 import { launchBrowser } from '../scraper/browser';
 
+/** Format new transfers as compact list: "$monto - Nombre Apellido" */
+function formatNuevasList(nuevas: { nombreOrdenante: string; importe: number }[]): string {
+  return nuevas
+    .map(t => {
+      const parts = t.nombreOrdenante.split(/\s+/);
+      const nombre = parts.slice(0, 2).join(' ') || '???';
+      return `  $${t.importe.toLocaleString('es-CU')} - ${nombre}`;
+    })
+    .join('\n');
+}
+
 class MonitorService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
@@ -68,6 +79,9 @@ class MonitorService {
           if (transfers.length > 0) {
             const result = await upsertMany(transfers);
             scrapeMessage = `\n📊 ${transfers.length} operaciones hoy (${result.nuevas} nuevas)`;
+            if (result.nuevas > 0) {
+              scrapeMessage += '\n' + formatNuevasList(result.nuevasList);
+            }
           } else {
             scrapeMessage = '\n📊 Sin operaciones hoy';
           }
@@ -108,7 +122,7 @@ class MonitorService {
     }
   }
 
-  async scrapeMonth(month: number, year: number): Promise<{ total: number; nuevas: number }> {
+  async scrapeMonth(month: number, year: number): Promise<{ total: number; nuevas: number; nuevasList: { nombreOrdenante: string; importe: number }[] }> {
     if (this.running) {
       throw new Error('Chequeo anterior aún en curso, intenta de nuevo');
     }
@@ -135,12 +149,14 @@ class MonitorService {
       console.log(`[Scrape] Completado: ${transfers.length} transferencias`);
 
       let nuevas = 0;
+      let nuevasList: { nombreOrdenante: string; importe: number }[] = [];
       if (transfers.length > 0) {
         const result = await upsertMany(transfers);
         nuevas = result.nuevas;
+        nuevasList = result.nuevasList;
       }
 
-      return { total: transfers.length, nuevas };
+      return { total: transfers.length, nuevas, nuevasList };
     } finally {
       await browser.close().catch(() => {});
       this.running = false;
@@ -179,6 +195,8 @@ class MonitorService {
       let scrapeMessage = '';
       let nuevasCount = 0;
 
+      let nuevasList: { nombreOrdenante: string; importe: number }[] = [];
+
       if (check.online) {
         const ok = await navigateToOperaciones(page);
         if (ok) {
@@ -187,7 +205,11 @@ class MonitorService {
           if (transfers.length > 0) {
             const result = await upsertMany(transfers);
             nuevasCount = result.nuevas;
+            nuevasList = result.nuevasList;
             scrapeMessage = `\n📊 ${transfers.length} operaciones hoy (${result.nuevas} nuevas)`;
+            if (result.nuevas > 0) {
+              scrapeMessage += '\n' + formatNuevasList(result.nuevasList);
+            }
             console.log(`[Monitor] Scrape: ${transfers.length} transferencias, ${result.nuevas} nuevas`);
           } else {
             scrapeMessage = '\n📊 Sin operaciones hoy';
