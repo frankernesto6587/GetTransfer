@@ -172,11 +172,12 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
   // Auto-process pending transfers
   app.post('/api/confirmar-odoo/auto', async (request, _reply) => {
     const bodySchema = z.object({
-      cantidad: z.number().int().min(1).max(100).default(20),
-    }).default({});
-    const body = bodySchema.parse(request.body || {});
+      cantidad: z.number().int().min(1).max(100).optional(),
+    });
+    const parsed = bodySchema.safeParse(request.body || {});
+    const cantidad = parsed.success && parsed.data.cantidad ? parsed.data.cantidad : 20;
 
-    const pendientes = await repo.getPendientesPorFecha(body.cantidad);
+    const pendientes = await repo.getPendientesPorFecha(cantidad);
     const resultados = {
       total: pendientes.length,
       confirmadas: 0,
