@@ -169,9 +169,14 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     }
   });
 
-  // Auto-process last 20 pending transfers
-  app.post('/api/confirmar-odoo/auto', async (_request, _reply) => {
-    const pendientes = await repo.getPendientesPorFecha(20);
+  // Auto-process pending transfers
+  app.post('/api/confirmar-odoo/auto', async (request, _reply) => {
+    const bodySchema = z.object({
+      cantidad: z.number().int().min(1).max(100).default(20),
+    }).default({});
+    const body = bodySchema.parse(request.body || {});
+
+    const pendientes = await repo.getPendientesPorFecha(body.cantidad);
     const resultados = {
       total: pendientes.length,
       confirmadas: 0,
@@ -182,6 +187,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
         id: number;
         nombreOrdenante: string;
         importe: number;
+        searchAttempts: number;
         resultado: 'confirmada' | 'candidatos' | 'sin_match' | 'error';
         gt_codigo?: string;
         odoo_order?: string;
@@ -223,24 +229,29 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
             id: transfer.id,
             nombreOrdenante: transfer.nombreOrdenante,
             importe: transfer.importe,
+            searchAttempts: transfer.searchAttempts,
             resultado: 'confirmada',
             gt_codigo: confirmed.codigoConfirmacion!,
             odoo_order: odooResult.order_name,
           });
         } else if (busqueda.candidatos && busqueda.candidatos.length > 0) {
+          await repo.incrementSearchAttempts(transfer.id);
           resultados.candidatos++;
           resultados.detalle.push({
             id: transfer.id,
             nombreOrdenante: transfer.nombreOrdenante,
             importe: transfer.importe,
+            searchAttempts: transfer.searchAttempts + 1,
             resultado: 'candidatos',
           });
         } else {
+          await repo.incrementSearchAttempts(transfer.id);
           resultados.sin_match++;
           resultados.detalle.push({
             id: transfer.id,
             nombreOrdenante: transfer.nombreOrdenante,
             importe: transfer.importe,
+            searchAttempts: transfer.searchAttempts + 1,
             resultado: 'sin_match',
           });
         }
@@ -250,6 +261,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
           id: transfer.id,
           nombreOrdenante: transfer.nombreOrdenante,
           importe: transfer.importe,
+          searchAttempts: transfer.searchAttempts,
           resultado: 'error',
           error: err instanceof Error ? err.message : 'Error desconocido',
         });

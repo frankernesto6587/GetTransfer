@@ -23,6 +23,7 @@ export interface Transferencia {
   confirmedAt: string | null
   claimedAt: string | null
   claimedBy: string | null
+  searchAttempts: number
 }
 
 export interface ApiToken {
@@ -141,6 +142,7 @@ export interface AutoConfirmarDetalle {
   id: number
   nombreOrdenante: string
   importe: number
+  searchAttempts: number
   resultado: 'confirmada' | 'candidatos' | 'sin_match' | 'error'
   gt_codigo?: string
   odoo_order?: string

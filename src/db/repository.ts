@@ -150,8 +150,15 @@ export async function getById(id: number) {
 export async function getPendientesPorFecha(limit: number = 20) {
   return prisma.transferencia.findMany({
     where: { codigoConfirmacion: null },
-    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
     take: limit,
+  });
+}
+
+export async function incrementSearchAttempts(id: number) {
+  return prisma.transferencia.update({
+    where: { id },
+    data: { searchAttempts: { increment: 1 } },
   });
 }
 

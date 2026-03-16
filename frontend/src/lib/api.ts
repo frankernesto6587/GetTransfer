@@ -164,8 +164,12 @@ export async function confirmarOdoo(transferId: number, paymentId: number): Prom
   return res.json()
 }
 
-export async function autoConfirmarOdoo(): Promise<AutoConfirmarResult> {
-  const res = await apiFetch('/api/confirmar-odoo/auto', { method: 'POST' })
+export async function autoConfirmarOdoo(cantidad: number = 20): Promise<AutoConfirmarResult> {
+  const res = await apiFetch('/api/confirmar-odoo/auto', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cantidad }),
+  })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)

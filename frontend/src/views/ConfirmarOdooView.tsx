@@ -47,6 +47,7 @@ export function ConfirmarOdooView() {
 
   // Auto result
   const [autoResult, setAutoResult] = useState<AutoConfirmarResult | null>(null)
+  const [autoCantidad, setAutoCantidad] = useState(20)
 
   const transfer = pendientes[currentIndex] ?? null
 
@@ -109,7 +110,7 @@ export function ConfirmarOdooView() {
   })
 
   const autoMut = useMutation({
-    mutationFn: autoConfirmarOdoo,
+    mutationFn: (cantidad: number) => autoConfirmarOdoo(cantidad),
     onSuccess: (data) => {
       setAutoResult(data)
     },
@@ -170,14 +171,24 @@ export function ConfirmarOdooView() {
           <h1 className="font-headline text-3xl font-bold text-white">Confirmar en Odoo</h1>
           <p className="text-secondary mt-1">Vincular transferencias GT con pagos POS en Odoo</p>
         </div>
-        <button
-          onClick={() => autoMut.mutate()}
-          disabled={autoMut.isPending}
-          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/15 text-amber-400 rounded-lg hover:bg-amber-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
-        >
-          <Zap size={16} />
-          {autoMut.isPending ? 'Procesando...' : 'Auto (20)'}
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={autoCantidad}
+            onChange={(e) => setAutoCantidad(Math.max(1, Math.min(100, parseInt(e.target.value) || 20)))}
+            className="w-16 bg-page border border-border rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-gold/50 transition-colors"
+          />
+          <button
+            onClick={() => autoMut.mutate(autoCantidad)}
+            disabled={autoMut.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/15 text-amber-400 rounded-lg hover:bg-amber-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
+          >
+            <Zap size={16} />
+            {autoMut.isPending ? 'Procesando...' : 'Auto'}
+          </button>
+        </div>
       </div>
 
       {/* Auto result modal */}
@@ -215,6 +226,7 @@ export function ConfirmarOdooView() {
               {autoResult.detalle.map((d) => (
                 <div key={d.id} className="py-2 flex items-center justify-between text-sm">
                   <div className="flex items-center gap-3">
+                    <span className="text-tertiary font-mono text-xs w-5">{d.searchAttempts}</span>
                     <span className="text-secondary">{d.nombreOrdenante}</span>
                     <span className="text-tertiary font-mono">${d.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -288,6 +300,10 @@ export function ConfirmarOdooView() {
                   <div className="flex justify-between">
                     <span className="text-tertiary">Ref Origen</span>
                     <span className={`font-mono text-xs ${m?.ref ? matchClass : noMatchClassSecondary}`}>{transfer.refOrigen || '—'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Intentos</span>
+                    <span className={`font-mono ${transfer.searchAttempts > 0 ? 'text-amber-400' : 'text-tertiary'}`}>{transfer.searchAttempts}</span>
                   </div>
                 </div>
               )
