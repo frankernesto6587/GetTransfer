@@ -8,10 +8,10 @@ function displayFecha(f: string) {
   const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : f;
 }
-import { buscarPendientes, confirmarTransferencia } from '../lib/api'
+import { buscarPendientesGetCode, confirmarGetCode } from '../lib/api'
 import type { Transferencia } from '../types'
 
-export function ConfirmarView() {
+export function GetCodeView() {
   const queryClient = useQueryClient()
 
   const [importe, setImporte] = useState('')
@@ -30,7 +30,7 @@ export function ConfirmarView() {
   const receiptRef = useRef<HTMLDivElement>(null)
 
   const confirmarMut = useMutation({
-    mutationFn: confirmarTransferencia,
+    mutationFn: confirmarGetCode,
     onSuccess: (data) => {
       setConfirmada(data)
       setResults(null)
@@ -62,7 +62,7 @@ export function ConfirmarView() {
     setConfirmada(null)
 
     try {
-      const data = await buscarPendientes({
+      const data = await buscarPendientesGetCode({
         importe: importe ? Number(importe) : undefined,
         nombre: nombre.trim() || undefined,
         ci: ci.trim() || undefined,
@@ -132,8 +132,8 @@ export function ConfirmarView() {
   return (
     <div className="p-8 max-w-[900px]">
       <div className="mb-8">
-        <h1 className="font-headline text-3xl font-bold text-white">Confirmar Transferencia</h1>
-        <p className="text-secondary mt-1">Buscar y confirmar transferencias pendientes</p>
+        <h1 className="font-headline text-3xl font-bold text-white">Generar Codigo GT</h1>
+        <p className="text-secondary mt-1">Buscar transferencias pendientes y generar codigo de confirmacion</p>
       </div>
 
       {/* Resultado de confirmacion exitosa */}
@@ -141,7 +141,7 @@ export function ConfirmarView() {
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-8">
           <div className="flex items-center gap-3 mb-6">
             <CheckCircle size={28} className="text-emerald-400" />
-            <h2 className="font-headline text-xl font-semibold text-emerald-400">Transferencia Confirmada</h2>
+            <h2 className="font-headline text-xl font-semibold text-emerald-400">Codigo Generado</h2>
           </div>
 
           <div className="text-center mb-6">
@@ -390,7 +390,7 @@ export function ConfirmarView() {
                         className="ml-4 flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
                       >
                         <CheckCircle size={14} />
-                        {confirmingId === t.id ? 'Confirmando...' : 'Confirmar'}
+                        {confirmingId === t.id ? 'Generando...' : 'Generar Codigo'}
                       </button>
                     </div>
                   ))}

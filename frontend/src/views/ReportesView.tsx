@@ -70,7 +70,7 @@ export function ReportesView() {
               <div key={d.fecha} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full bg-gold/20 text-gold text-xs flex items-center justify-center font-medium">{i + 1}</span>
-                  <span className="font-mono text-sm text-secondary">{d.fecha}</span>
+                  <span className="font-mono text-sm text-secondary">{d.fecha.slice(0, 10)}</span>
                 </div>
                 <span className="font-mono text-sm text-white">{d.cantidad} transferencias</span>
               </div>
@@ -85,7 +85,7 @@ export function ReportesView() {
               <div key={d.fecha} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full bg-gold/20 text-gold text-xs flex items-center justify-center font-medium">{i + 1}</span>
-                  <span className="font-mono text-sm text-secondary">{d.fecha}</span>
+                  <span className="font-mono text-sm text-secondary">{d.fecha.slice(0, 10)}</span>
                 </div>
                 <span className="font-mono text-sm text-white">${d.total.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
               </div>

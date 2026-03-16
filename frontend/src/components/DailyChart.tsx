@@ -27,7 +27,8 @@ export function DailyChart({ data }: DailyChartProps) {
         {data.map((day) => {
           const heightPct = maxCantidad > 0 ? (day.cantidad / maxCantidad) * 100 : 0
           const barHeight = Math.max(heightPct * 1.6, 4) // max ~160px
-          const label = day.fecha.slice(8) // DD from YYYY-MM-DD
+          const isoDate = day.fecha.slice(0, 10) // YYYY-MM-DD from ISO
+          const label = isoDate.slice(8) // DD
 
           return (
             <div
@@ -40,7 +41,7 @@ export function DailyChart({ data }: DailyChartProps) {
               <div
                 className="w-full max-w-[32px] mx-auto rounded-t-md bg-gold/80 hover:bg-gold transition-colors cursor-default"
                 style={{ height: `${barHeight}px` }}
-                title={`${day.fecha}: ${day.cantidad} transferencias — $${day.total.toLocaleString('es-CU')}`}
+                title={`${isoDate}: ${day.cantidad} transferencias — $${day.total.toLocaleString('es-CU')}`}
               />
               <span className="text-xs text-tertiary font-mono">{label}</span>
             </div>

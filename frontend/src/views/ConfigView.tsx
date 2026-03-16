@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Key, RefreshCw, Copy, Check, Trash2, AlertCircle, Radio, Clock, Send, Download, Wifi, WifiOff, Link, Unlink } from 'lucide-react'
-import { getActiveToken, generateToken, deleteToken, getMonitorConfig, updateMonitorConfig, getMonitorStatus, triggerScrape, forceCheck, getWebhookInfo, registerWebhook, unregisterWebhook } from '../lib/api'
+import { Key, RefreshCw, Copy, Check, Trash2, AlertCircle, Radio, Clock, Send, Download, Wifi, WifiOff, Link, Unlink, Server, Plug } from 'lucide-react'
+import { getActiveToken, generateToken, deleteToken, getMonitorConfig, updateMonitorConfig, getMonitorStatus, triggerScrape, forceCheck, getWebhookInfo, registerWebhook, unregisterWebhook, getOdooConfig, updateOdooConfig, testOdooConnection } from '../lib/api'
 import type { ApiToken, MonitorConfig, BankStatus, WebhookInfo } from '../types'
 
 export function ConfigView() {
@@ -32,6 +32,13 @@ export function ConfigView() {
   const [scrapeYear, setScrapeYear] = useState(new Date().getFullYear())
   const [scraping, setScraping] = useState(false)
   const [scrapeResult, setScrapeResult] = useState('')
+
+  // Odoo config state
+  const [odooForm, setOdooForm] = useState({ api_url: '', api_key: '' })
+  const [savingOdoo, setSavingOdoo] = useState(false)
+  const [odooSuccess, setOdooSuccess] = useState('')
+  const [testingOdoo, setTestingOdoo] = useState(false)
+  const [odooTestResult, setOdooTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   const fetchToken = async () => {
     try {
@@ -105,7 +112,44 @@ export function ConfigView() {
     }
   }
 
-  useEffect(() => { fetchToken(); fetchMonitor() }, [])
+  const fetchOdooConfig = async () => {
+    try {
+      const config = await getOdooConfig()
+      setOdooForm({ api_url: config.api_url || '', api_key: config.api_key || '' })
+    } catch {
+      // Odoo config not available yet
+    }
+  }
+
+  const handleSaveOdoo = async () => {
+    setSavingOdoo(true)
+    setError('')
+    setOdooSuccess('')
+    try {
+      await updateOdooConfig(odooForm)
+      setOdooSuccess('Configuracion guardada')
+      setTimeout(() => setOdooSuccess(''), 3000)
+    } catch {
+      setError('Error al guardar configuracion de Odoo')
+    } finally {
+      setSavingOdoo(false)
+    }
+  }
+
+  const handleTestOdoo = async () => {
+    setTestingOdoo(true)
+    setOdooTestResult(null)
+    try {
+      const result = await testOdooConnection(odooForm)
+      setOdooTestResult(result)
+    } catch (err: any) {
+      setOdooTestResult({ ok: false, message: err.message || 'Error de conexion' })
+    } finally {
+      setTestingOdoo(false)
+    }
+  }
+
+  useEffect(() => { fetchToken(); fetchMonitor(); fetchOdooConfig() }, [])
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -293,6 +337,72 @@ export function ConfigView() {
           <p className="text-xs text-amber-400">
             Si regenera el token, debera actualizarlo tambien en la configuracion de Odoo.
           </p>
+        </div>
+      </div>
+
+      {/* Odoo API Config Section */}
+      <div className="rounded-xl border border-border bg-surface p-6 mb-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Server size={20} className="text-gold" />
+          <h2 className="font-headline text-lg font-semibold text-white">Conexion Odoo API</h2>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">URL de la API Odoo</label>
+            <input
+              type="text"
+              placeholder="http://192.168.1.86:8000"
+              value={odooForm.api_url}
+              onChange={(e) => setOdooForm(f => ({ ...f, api_url: e.target.value }))}
+              className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">API Key de Odoo</label>
+            <input
+              type="password"
+              placeholder="API Key para autenticacion"
+              value={odooForm.api_key}
+              onChange={(e) => setOdooForm(f => ({ ...f, api_key: e.target.value }))}
+              className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors font-mono"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSaveOdoo}
+              disabled={savingOdoo}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              {savingOdoo ? 'Guardando...' : 'Guardar'}
+            </button>
+            <button
+              onClick={handleTestOdoo}
+              disabled={testingOdoo || !odooForm.api_url}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/5 text-secondary rounded-lg hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              <Plug size={14} />
+              {testingOdoo ? 'Probando...' : 'Probar Conexion'}
+            </button>
+            {odooSuccess && (
+              <span className="flex items-center gap-1 text-sm text-emerald-400">
+                <Check size={14} />
+                {odooSuccess}
+              </span>
+            )}
+          </div>
+
+          {odooTestResult && (
+            <div className={`p-3 rounded-lg border text-sm ${
+              odooTestResult.ok
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
+              {odooTestResult.ok ? <Check size={14} className="inline mr-1" /> : <AlertCircle size={14} className="inline mr-1" />}
+              {odooTestResult.message}
+            </div>
+          )}
         </div>
       </div>
 

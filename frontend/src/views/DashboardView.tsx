@@ -99,7 +99,7 @@ export function DashboardView() {
         <MetricCard
           label="Día Pico"
           value={diaPico ? String(diaPico.cantidad) : '—'}
-          delta={diaPico ? diaPico.fecha : undefined}
+          delta={diaPico ? diaPico.fecha.slice(0, 10) : undefined}
           icon={CalendarCheck}
         />
       </div>

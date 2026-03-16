@@ -8,7 +8,7 @@ datasource db {
 
 model Transferencia {
   id                  Int      @id @default(autoincrement())
-  fecha               String
+  fecha               DateTime
   refCorriente        String
   refOrigen           String   @unique
   importe             Float
@@ -57,6 +57,13 @@ model MonitorConfig {
   telegram_topic_id  Int?
   telegram_webhook_url String?
   updatedAt          DateTime @updatedAt
+}
+
+model OdooConfig {
+  id          Int      @id @default(1)
+  api_url     String   @default("")
+  api_key     String   @default("")
+  updatedAt   DateTime @updatedAt
 }
 
 model BankStatus {

@@ -248,7 +248,7 @@ async function main() {
 
       for (const t of allTransfers) {
         console.log([
-          t.fecha.padEnd(10),
+          t.fecha.toISOString().slice(0, 10).padEnd(10),
           t.importe.toFixed(2).padStart(12),
           (t.nombreOrdenante || '-').substring(0, 35).padEnd(35),
           (t.tarjetaOrdenante || '-').padEnd(20),
@@ -277,7 +277,7 @@ async function main() {
     const csvHeader = 'fecha,importe,nombre_ordenante,ci_ordenante,tarjeta_ordenante,cuenta_ordenante,canal_emision,id_cubacel,telefono_ordenante,sucursal_ordenante,num_debito,tipo_servicio,fecha_factura,formato,ref_corriente,ref_origen';
     const csvRows = allTransfers.map(t =>
       [
-        t.fecha, t.importe, `"${t.nombreOrdenante}"`, t.ciOrdenante, t.tarjetaOrdenante,
+        t.fecha.toISOString().slice(0, 10), t.importe, `"${t.nombreOrdenante}"`, t.ciOrdenante, t.tarjetaOrdenante,
         t.cuentaOrdenante, `"${t.canalEmision}"`, t.idCubacel, t.telefonoOrdenante,
         t.sucursalOrdenante, t.numDebito, t.tipoServicio, t.fechaFactura, t.formato,
         t.refCorriente, t.refOrigen,

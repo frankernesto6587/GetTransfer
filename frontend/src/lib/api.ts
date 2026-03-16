@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation } from '../types'
+import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -62,9 +62,9 @@ export const resumenQuery = () => ({
   queryFn: () => fetcher<Resumen>('/api/resumen'),
 })
 
-// ── Confirmar ──
+// ── GetCode (formerly Confirmar) ──
 
-export interface BuscarConfirmacionParams {
+export interface BuscarGetCodeParams {
   importe?: number
   nombre?: string
   ci?: string
@@ -72,8 +72,8 @@ export interface BuscarConfirmacionParams {
   refCorriente?: string
 }
 
-export async function buscarPendientes(params: BuscarConfirmacionParams): Promise<Transferencia[]> {
-  const res = await apiFetch('/api/confirmar/buscar', {
+export async function buscarPendientesGetCode(params: BuscarGetCodeParams): Promise<Transferencia[]> {
+  const res = await apiFetch('/api/getcode/buscar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
@@ -82,8 +82,8 @@ export async function buscarPendientes(params: BuscarConfirmacionParams): Promis
   return res.json()
 }
 
-export async function confirmarTransferencia(id: number): Promise<Transferencia> {
-  const res = await apiFetch(`/api/confirmar/${id}`, { method: 'POST' })
+export async function confirmarGetCode(id: number): Promise<Transferencia> {
+  const res = await apiFetch(`/api/getcode/${id}`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -92,7 +92,80 @@ export async function confirmarTransferencia(id: number): Promise<Transferencia>
 }
 
 export async function liberarTransferencia(codigo: string): Promise<Transferencia> {
-  const res = await apiFetch(`/api/confirmar/${encodeURIComponent(codigo)}/liberar`, { method: 'POST' })
+  const res = await apiFetch(`/api/getcode/${encodeURIComponent(codigo)}/liberar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Odoo Config ──
+
+export async function getOdooConfig(): Promise<OdooConfig> {
+  const res = await apiFetch('/api/confirmar-odoo/config')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function updateOdooConfig(data: Partial<OdooConfig>): Promise<OdooConfig> {
+  const res = await apiFetch('/api/confirmar-odoo/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function testOdooConnection(data: { api_url: string; api_key: string }): Promise<{ ok: boolean; message: string }> {
+  const res = await apiFetch('/api/confirmar-odoo/config/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Confirmar Odoo ──
+
+export async function getPendientesOdoo(): Promise<Transferencia[]> {
+  const res = await apiFetch('/api/confirmar-odoo/pendientes')
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function buscarOdooMatch(transferId: number): Promise<{ transfer: Transferencia; odoo: OdooMatchResponse }> {
+  const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/buscar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function confirmarOdoo(transferId: number, paymentId: number): Promise<{ confirmed: Transferencia; odoo: { success: boolean; order_name?: string; message?: string } }> {
+  const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/confirmar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payment_id: paymentId }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function autoConfirmarOdoo(): Promise<AutoConfirmarResult> {
+  const res = await apiFetch('/api/confirmar-odoo/auto', { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)

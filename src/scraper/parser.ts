@@ -6,7 +6,7 @@
  */
 
 export interface TransferenciaEntrada {
-  fecha: string;
+  fecha: Date;
   refCorriente: string;
   refOrigen: string;
   importe: number;
@@ -130,11 +130,11 @@ export function parseOperacionRow(cells: string[]): TransferenciaEntrada | null 
 
   const parsed = parseObservaciones(observaciones);
 
-  // Convert DD/MM/YY to YYYY-MM-DD for proper sorting
-  const fechaSortable = convertFecha(fecha);
+  const fechaISO = convertFecha(fecha);
+  const fechaDate = new Date(fechaISO + 'T00:00:00Z');
 
   return {
-    fecha: fechaSortable,
+    fecha: isNaN(fechaDate.getTime()) ? new Date() : fechaDate,
     refCorriente,
     refOrigen,
     importe: parseFloat(importe.replace(/,/g, '')) || 0,

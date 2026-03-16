@@ -69,11 +69,11 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   const where: Prisma.TransferenciaWhereInput = {};
 
   if (fecha) {
-    where.fecha = fecha;
+    where.fecha = new Date(fecha + 'T00:00:00Z');
   } else if (fechaDesde || fechaHasta) {
     where.fecha = {};
-    if (fechaDesde) where.fecha.gte = fechaDesde;
-    if (fechaHasta) where.fecha.lte = fechaHasta;
+    if (fechaDesde) (where.fecha as any).gte = new Date(fechaDesde + 'T00:00:00Z');
+    if (fechaHasta) (where.fecha as any).lte = new Date(fechaHasta + 'T23:59:59Z');
   }
   if (nombre) where.nombreOrdenante = { contains: nombre, mode: 'insensitive' };
   if (desde !== undefined || hasta !== undefined) {
@@ -141,6 +141,18 @@ export interface BuscarPendientesParams {
   ci?: string;
   cuentaOrdenante?: string;
   refCorriente?: string;
+}
+
+export async function getById(id: number) {
+  return prisma.transferencia.findUnique({ where: { id } });
+}
+
+export async function getPendientesPorFecha(limit: number = 20) {
+  return prisma.transferencia.findMany({
+    where: { codigoConfirmacion: null },
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    take: limit,
+  });
 }
 
 export async function buscarPendientes(params: BuscarPendientesParams) {
@@ -243,6 +255,27 @@ export async function generateToken(name: string = '') {
 
 export async function deleteToken(id: number) {
   return prisma.apiToken.delete({ where: { id } });
+}
+
+// ── OdooConfig ──
+
+export async function getOdooConfig() {
+  return prisma.odooConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1 },
+    update: {},
+  });
+}
+
+export async function updateOdooConfig(data: {
+  api_url?: string;
+  api_key?: string;
+}) {
+  return prisma.odooConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1, ...data },
+    update: data,
+  });
 }
 
 // ── MonitorConfig ──

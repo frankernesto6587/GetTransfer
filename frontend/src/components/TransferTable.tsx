@@ -12,7 +12,8 @@ import { liberarTransferencia } from '../lib/api'
 
 /** YYYY-MM-DD → DD/MM/YYYY */
 function displayFecha(f: string) {
-  const m = f?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const iso = f?.slice(0, 10)
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : f
 }
 

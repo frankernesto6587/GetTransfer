@@ -107,3 +107,51 @@ export interface Invitation {
   usedAt: string | null
   createdAt: string
 }
+
+// ── Odoo Config ──
+
+export interface OdooConfig {
+  api_url: string
+  api_key: string
+}
+
+// ── Confirmar Odoo types ──
+
+export interface OdooPaymentMatch {
+  payment_id: number
+  order_id: number
+  order_name: string
+  order_date: string
+  amount: number
+  transfer_code: string | null
+  card_holder_ci: string | null
+  card_holder_name: string | null
+  card_number: string | null
+  nivel_confianza: number
+}
+
+export interface OdooMatchResponse {
+  match_auto: boolean
+  nivel_confianza: number | null
+  resultado: OdooPaymentMatch | null
+  candidatos: OdooPaymentMatch[]
+}
+
+export interface AutoConfirmarDetalle {
+  id: number
+  nombreOrdenante: string
+  importe: number
+  resultado: 'confirmada' | 'candidatos' | 'sin_match' | 'error'
+  gt_codigo?: string
+  odoo_order?: string
+  error?: string
+}
+
+export interface AutoConfirmarResult {
+  total: number
+  confirmadas: number
+  candidatos: number
+  sin_match: number
+  errores: number
+  detalle: AutoConfirmarDetalle[]
+}

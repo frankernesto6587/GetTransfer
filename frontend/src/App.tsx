@@ -5,7 +5,8 @@ import type { View } from './components/Sidebar'
 import { LoginView } from './views/LoginView'
 import { DashboardView } from './views/DashboardView'
 import { TransferenciasView } from './views/TransferenciasView'
-import { ConfirmarView } from './views/ConfirmarView'
+import { GetCodeView } from './views/GetCodeView'
+import { ConfirmarOdooView } from './views/ConfirmarOdooView'
 import { ReportesView } from './views/ReportesView'
 import { ConfigView } from './views/ConfigView'
 import { AyudaView } from './views/AyudaView'
@@ -14,7 +15,8 @@ import { UsuariosView } from './views/UsuariosView'
 const views: Record<View, React.FC> = {
   dashboard: DashboardView,
   transferencias: TransferenciasView,
-  confirmar: ConfirmarView,
+  getcode: GetCodeView,
+  'confirmar-odoo': ConfirmarOdooView,
   reportes: ReportesView,
   configuracion: ConfigView,
   usuarios: UsuariosView,
