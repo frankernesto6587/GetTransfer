@@ -291,7 +291,7 @@ export function ConfirmarOdooView() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-tertiary">Fecha</span>
-                    <span className="text-white">{displayFecha(transfer.fecha)}</span>
+                    <span className={fechaDiffClass(bestMatch?.dias_diferencia)}>{displayFecha(transfer.fecha)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-tertiary">Canal</span>
@@ -472,6 +472,14 @@ const matchClass = 'text-emerald-400'
 const noMatchClass = 'text-white'
 const noMatchClassSecondary = 'text-secondary'
 
+/** Color de fecha según dias_diferencia: 0 días = azul, >2 días = ámbar, 1-2 = normal */
+function fechaDiffClass(dias: number | null | undefined): string {
+  if (dias === null || dias === undefined) return noMatchClass
+  if (dias === 0) return 'text-blue-400'
+  if (dias > 2) return 'text-amber-400'
+  return noMatchClass
+}
+
 function PaymentCard({
   match,
   transfer,
@@ -501,8 +509,8 @@ function PaymentCard({
           </p>
         </div>
         <div>
-          <span className="text-tertiary">Fecha</span>
-          <p className="text-secondary">{match.order_date}</p>
+          <span className="text-tertiary">Fecha{match.dias_diferencia !== null ? ` (${match.dias_diferencia}d)` : ''}</span>
+          <p className={fechaDiffClass(match.dias_diferencia)}>{match.order_date}</p>
         </div>
         {match.card_holder_ci && (
           <div>
