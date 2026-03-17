@@ -87,7 +87,21 @@ jobs:
           pnpm build
 
       - name: Ensure Playwright chromium
-        run: npx playwright install chromium 2>/dev/null || true
+        run: |
+          EXPECTED_PATH="$HOME/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-linux64/chrome-headless-shell"
+          if [ -x "$EXPECTED_PATH" ]; then
+            echo "Chromium already installed"
+          elif [ -f "$HOME/.playwright-cache/chrome-headless-shell-linux64.zip" ]; then
+            echo "Restoring from local cache..."
+            mkdir -p "$HOME/.cache/ms-playwright/chromium_headless_shell-1208"
+            cd "$HOME/.cache/ms-playwright/chromium_headless_shell-1208"
+            unzip -oq "$HOME/.playwright-cache/chrome-headless-shell-linux64.zip"
+            chmod +x chrome-headless-shell-linux64/chrome-headless-shell
+            echo "Restored from local zip"
+          else
+            echo "Trying to download..."
+            npx playwright install chromium 2>/dev/null || echo "Download failed (expected in restricted networks)"
+          fi
 
       - name: Restart API
         run: pm2 restart gettransfer || pm2 start ecosystem.config.js
