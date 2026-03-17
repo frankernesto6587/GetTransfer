@@ -158,7 +158,12 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
         gt_fecha: formatDate(confirmed.fecha),
         gt_importe: confirmed.importe,
       });
-      return { confirmed, odoo: odooResult };
+
+      // Step 3: Mark as claimed in GT
+      const orderName = odooResult.order_name || `payment:${bodyParsed.data.payment_id}`;
+      await repo.reclamarTransferencia(confirmed.codigoConfirmacion!, orderName);
+
+      return { confirmed: { ...confirmed, claimedAt: new Date(), claimedBy: orderName }, odoo: odooResult };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
       // GT was confirmed but Odoo write failed - return partial success
@@ -224,6 +229,10 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
             gt_fecha: formatDate(confirmed.fecha),
             gt_importe: confirmed.importe,
           });
+
+          // Mark as claimed
+          const orderName = odooResult.order_name || `payment:${busqueda.resultado.payment_id}`;
+          await repo.reclamarTransferencia(confirmed.codigoConfirmacion!, orderName);
 
           resultados.confirmadas++;
           resultados.detalle.push({
