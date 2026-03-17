@@ -275,7 +275,12 @@ export function ConfirmarOdooView() {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-tertiary">Nombre</span>
-                    <span className={`font-medium ${m?.nombre ? matchClass : noMatchClass}`}>{transfer.nombreOrdenante || '—'}</span>
+                    <span className={`font-medium ${m ? nombreClass(m.nombre) : noMatchClass}`}>
+                      {transfer.nombreOrdenante || '—'}
+                      {m?.similitud_nombre !== null && m?.similitud_nombre !== undefined && m.similitud_nombre < 100 && m.similitud_nombre > 0 && (
+                        <span className="text-xs ml-1 opacity-70">({m.similitud_nombre}%)</span>
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-tertiary">CI</span>
@@ -458,19 +463,29 @@ function amountMatches(a: number, b: number): boolean {
 
 /** Get which fields match between a GT transfer and an Odoo payment */
 function getMatchingFields(transfer: Transferencia | null, match: OdooPaymentMatch) {
-  if (!transfer) return { ci: false, cuenta: false, nombre: false, importe: false, ref: false }
+  if (!transfer) return { ci: false, cuenta: false, nombre: 'none' as const, importe: false, ref: false, similitud_nombre: null as number | null }
+  const sim = match.similitud_nombre
+  const nombre: 'exact' | 'similar' | 'none' = sim === 100 ? 'exact' : (sim !== null && sim >= 50) ? 'similar' : 'none'
   return {
     ci: fieldsMatch(transfer.ciOrdenante, match.card_holder_ci),
     cuenta: fieldsMatch(transfer.cuentaOrdenante, match.card_number),
-    nombre: fieldsMatch(transfer.nombreOrdenante, match.card_holder_name),
+    nombre,
+    similitud_nombre: sim,
     importe: amountMatches(transfer.importe, match.amount),
     ref: fieldsMatch(transfer.refOrigen, match.transfer_code),
   }
 }
 
 const matchClass = 'text-emerald-400'
+const similarClass = 'text-cyan-400'
 const noMatchClass = 'text-white'
 const noMatchClassSecondary = 'text-secondary'
+
+function nombreClass(nombre: 'exact' | 'similar' | 'none'): string {
+  if (nombre === 'exact') return matchClass
+  if (nombre === 'similar') return similarClass
+  return noMatchClass
+}
 
 /** Color de fecha según dias_diferencia: 0 días = azul, >2 días = ámbar, 1-2 = normal */
 function fechaDiffClass(dias: number | null | undefined): string {
@@ -520,8 +535,8 @@ function PaymentCard({
         )}
         {match.card_holder_name && (
           <div>
-            <span className="text-tertiary">Nombre</span>
-            <p className={m.nombre ? matchClass : noMatchClassSecondary}>{match.card_holder_name}</p>
+            <span className="text-tertiary">Nombre{match.similitud_nombre !== null && match.similitud_nombre < 100 && match.similitud_nombre > 0 ? ` (${match.similitud_nombre}%)` : ''}</span>
+            <p className={m.nombre === 'none' ? noMatchClassSecondary : nombreClass(m.nombre)}>{match.card_holder_name}</p>
           </div>
         )}
         {match.card_number && (

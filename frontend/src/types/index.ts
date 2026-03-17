@@ -130,6 +130,7 @@ export interface OdooPaymentMatch {
   card_number: string | null
   nivel_confianza: number
   dias_diferencia: number | null
+  similitud_nombre: number | null
 }
 
 export interface OdooMatchResponse {
