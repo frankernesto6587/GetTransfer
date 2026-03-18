@@ -7,6 +7,7 @@ import { DashboardView } from './views/DashboardView'
 import { TransferenciasView } from './views/TransferenciasView'
 import { GetCodeView } from './views/GetCodeView'
 import { ConfirmarOdooView } from './views/ConfirmarOdooView'
+import { TransferenciasOdooView } from './views/TransferenciasOdooView'
 import { ReportesView } from './views/ReportesView'
 import { ConfigView } from './views/ConfigView'
 import { AyudaView } from './views/AyudaView'
@@ -17,6 +18,7 @@ const views: Record<View, React.FC> = {
   transferencias: TransferenciasView,
   getcode: GetCodeView,
   'confirmar-odoo': ConfirmarOdooView,
+  'transferencias-odoo': TransferenciasOdooView,
   reportes: ReportesView,
   configuracion: ConfigView,
   usuarios: UsuariosView,

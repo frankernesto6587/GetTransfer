@@ -140,6 +140,35 @@ export interface OdooMatchResponse {
   candidatos: OdooPaymentMatch[]
 }
 
+// ── Transferencias Odoo types ──
+
+export interface TransferenciaOdooItem {
+  payment_id: number
+  order_name: string | null
+  order_date: string | null
+  session_name: string | null
+  amount: number
+  payment_type: string | null
+  transfer_code: string | null
+  card_holder_name: string | null
+  card_holder_ci: string | null
+  card_number: string | null
+  gt_codigo: string | null
+  gt_nombre_ordenante: string | null
+  gt_ci_ordenante: string | null
+  gt_cuenta_ordenante: string | null
+  gt_canal_emision: string | null
+  gt_ref_origen: string | null
+  gt_ref_corriente: string | null
+  gt_fecha: string | null
+  gt_importe: number | null
+}
+
+export interface TransferenciasOdooResponse {
+  data: TransferenciaOdooItem[]
+  pagination: PaginationInfo
+}
+
 export interface AutoConfirmarDetalle {
   id: number
   nombreOrdenante: string

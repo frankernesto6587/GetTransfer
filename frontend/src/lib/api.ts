@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -29,6 +29,11 @@ export interface TransferenciasParams {
   fechaHasta?: string
   desde?: number
   hasta?: number
+  canal?: string
+  ci?: string
+  cuenta?: string
+  refOrigen?: string
+  estado?: string
   orderBy?: string
   orderDir?: 'asc' | 'desc'
 }
@@ -43,6 +48,11 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   if (params.desde) sp.set('desde', String(params.desde))
   if (params.hasta) sp.set('hasta', String(params.hasta))
+  if (params.canal) sp.set('canal', params.canal)
+  if (params.ci) sp.set('ci', params.ci)
+  if (params.cuenta) sp.set('cuenta', params.cuenta)
+  if (params.refOrigen) sp.set('refOrigen', params.refOrigen)
+  if (params.estado) sp.set('estado', params.estado)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
   if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
@@ -175,6 +185,53 @@ export async function autoConfirmarOdoo(cantidad: number = 20): Promise<AutoConf
     throw new Error(body.error || `HTTP ${res.status}`)
   }
   return res.json()
+}
+
+// ── Transferencias Odoo ──
+
+export interface TransferenciasOdooParams {
+  page?: number
+  limit?: number
+  fechaDesde?: string
+  fechaHasta?: string
+  nombre?: string
+  ci?: string
+  cuenta?: string
+  canal?: string
+  refOrigen?: string
+  gtCodigo?: string
+  transferCode?: string
+  desde?: number
+  hasta?: number
+  paymentType?: string
+}
+
+export function buildTransferenciasOdooUrl(params: TransferenciasOdooParams): string {
+  const sp = new URLSearchParams()
+  if (params.page) sp.set('page', String(params.page))
+  if (params.limit) sp.set('limit', String(params.limit))
+  if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
+  if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
+  if (params.nombre) sp.set('nombre', params.nombre)
+  if (params.ci) sp.set('ci', params.ci)
+  if (params.cuenta) sp.set('cuenta', params.cuenta)
+  if (params.canal) sp.set('canal', params.canal)
+  if (params.refOrigen) sp.set('refOrigen', params.refOrigen)
+  if (params.gtCodigo) sp.set('gtCodigo', params.gtCodigo)
+  if (params.transferCode) sp.set('transferCode', params.transferCode)
+  if (params.desde) sp.set('desde', String(params.desde))
+  if (params.hasta) sp.set('hasta', String(params.hasta))
+  if (params.paymentType) sp.set('paymentType', params.paymentType)
+  const qs = sp.toString()
+  return `/api/transferencias-odoo${qs ? `?${qs}` : ''}`
+}
+
+export const transferenciasOdooQuery = (params: TransferenciasOdooParams) => {
+  const url = buildTransferenciasOdooUrl(params)
+  return {
+    queryKey: ['transferencias-odoo', params] as const,
+    queryFn: () => fetcher<TransferenciasOdooResponse>(url),
+  }
 }
 
 // ── Token API ──

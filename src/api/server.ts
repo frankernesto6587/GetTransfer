@@ -13,6 +13,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import { transferenciaRoutes } from './routes/transferencias';
 import { getcodeRoutes } from './routes/getcode';
 import { confirmarOdooRoutes } from './routes/confirmar-odoo';
+import { transferenciasOdooRoutes } from './routes/transferencias-odoo';
 import { reclamarRoutes } from './routes/reclamar';
 import { tokenRoutes } from './routes/token';
 import { monitorRoutes } from './routes/monitor';
@@ -68,6 +69,7 @@ async function main() {
   await app.register(transferenciaRoutes);
   await app.register(getcodeRoutes);
   await app.register(confirmarOdooRoutes);
+  await app.register(transferenciasOdooRoutes);
   await app.register(reclamarRoutes);
   await app.register(tokenRoutes);
   await app.register(monitorRoutes);

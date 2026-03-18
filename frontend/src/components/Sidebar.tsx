@@ -8,10 +8,11 @@ import {
   LogOut,
   KeyRound,
   Link,
+  Database,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-export type View = 'dashboard' | 'transferencias' | 'getcode' | 'confirmar-odoo' | 'reportes' | 'configuracion' | 'usuarios' | 'ayuda'
+export type View = 'dashboard' | 'transferencias' | 'getcode' | 'confirmar-odoo' | 'transferencias-odoo' | 'reportes' | 'configuracion' | 'usuarios' | 'ayuda'
 
 interface NavItem {
   icon: typeof LayoutDashboard
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { icon: ArrowLeftRight, label: 'Transferencias', view: 'transferencias' },
   { icon: KeyRound, label: 'GetCode', view: 'getcode', requireConfirm: true },
   { icon: Link, label: 'Confirmar Odoo', view: 'confirmar-odoo', requireConfirm: true },
+  { icon: Database, label: 'Transferencias Odoo', view: 'transferencias-odoo', requireConfirm: true },
   { icon: BarChart3, label: 'Reportes', view: 'reportes' },
   { icon: Settings, label: 'Configuracion', view: 'configuracion', requireAdmin: true },
   { icon: Users, label: 'Usuarios', view: 'usuarios', requireAdmin: true },

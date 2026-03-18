@@ -35,9 +35,20 @@ export function TransferenciasView() {
   const [fechaHasta, setFechaHasta] = useState(today())
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const [canal, setCanal] = useState('')
+  const [ci, setCi] = useState('')
+  const [debouncedCi, setDebouncedCi] = useState('')
+  const [cuenta, setCuenta] = useState('')
+  const [debouncedCuenta, setDebouncedCuenta] = useState('')
+  const [refOrigen, setRefOrigen] = useState('')
+  const [debouncedRefOrigen, setDebouncedRefOrigen] = useState('')
+  const [estado, setEstado] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
   const [activePreset, setActivePreset] = useState<DatePreset>('month')
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const debounceRefCi = useRef<ReturnType<typeof setTimeout>>(null)
+  const debounceRefCuenta = useRef<ReturnType<typeof setTimeout>>(null)
+  const debounceRefRefOrigen = useRef<ReturnType<typeof setTimeout>>(null)
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -48,9 +59,30 @@ export function TransferenciasView() {
     }, 300)
   }, [])
 
+  const handleCiChange = useCallback((value: string) => {
+    setCi(value)
+    if (debounceRefCi.current) clearTimeout(debounceRefCi.current)
+    debounceRefCi.current = setTimeout(() => { setDebouncedCi(value); setPage(1) }, 300)
+  }, [])
+
+  const handleCuentaChange = useCallback((value: string) => {
+    setCuenta(value)
+    if (debounceRefCuenta.current) clearTimeout(debounceRefCuenta.current)
+    debounceRefCuenta.current = setTimeout(() => { setDebouncedCuenta(value); setPage(1) }, 300)
+  }, [])
+
+  const handleRefOrigenChange = useCallback((value: string) => {
+    setRefOrigen(value)
+    if (debounceRefRefOrigen.current) clearTimeout(debounceRefRefOrigen.current)
+    debounceRefRefOrigen.current = setTimeout(() => { setDebouncedRefOrigen(value); setPage(1) }, 300)
+  }, [])
+
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (debounceRefCi.current) clearTimeout(debounceRefCi.current)
+      if (debounceRefCuenta.current) clearTimeout(debounceRefCuenta.current)
+      if (debounceRefRefOrigen.current) clearTimeout(debounceRefRefOrigen.current)
     }
   }, [])
 
@@ -82,14 +114,22 @@ export function TransferenciasView() {
   }, [])
 
   const hasActiveFilters = useMemo(() => {
-    return debouncedSearch || desde || hasta
-  }, [debouncedSearch, desde, hasta])
+    return debouncedSearch || desde || hasta || canal || debouncedCi || debouncedCuenta || debouncedRefOrigen || estado
+  }, [debouncedSearch, desde, hasta, canal, debouncedCi, debouncedCuenta, debouncedRefOrigen, estado])
 
   const clearFilters = useCallback(() => {
     setSearch('')
     setDebouncedSearch('')
     setDesde('')
     setHasta('')
+    setCanal('')
+    setCi('')
+    setDebouncedCi('')
+    setCuenta('')
+    setDebouncedCuenta('')
+    setRefOrigen('')
+    setDebouncedRefOrigen('')
+    setEstado('')
     setPage(1)
   }, [])
 
@@ -103,6 +143,11 @@ export function TransferenciasView() {
       fechaHasta: fechaHasta || undefined,
       desde: desde ? Number(desde) : undefined,
       hasta: hasta ? Number(hasta) : undefined,
+      canal: canal || undefined,
+      ci: debouncedCi || undefined,
+      cuenta: debouncedCuenta || undefined,
+      refOrigen: debouncedRefOrigen || undefined,
+      estado: estado || undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
@@ -213,6 +258,72 @@ export function TransferenciasView() {
               </button>
             </>
           )}
+        </div>
+
+        {/* Canal, CI, Cuenta, Ref Origen, Estado */}
+        <div className="flex items-center gap-3 px-5 py-3 border-t border-border">
+          <Filter size={16} className="text-tertiary shrink-0" />
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-tertiary whitespace-nowrap">Canal</label>
+            <select
+              value={canal}
+              onChange={(e) => { setCanal(e.target.value); setPage(1) }}
+              className="bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-gold/50 transition-colors [color-scheme:dark]"
+            >
+              <option value="">Todos</option>
+              <option value="BANCA MOVIL">BANCA MOVIL</option>
+              <option value="BANCAMOVIL-BPA">BANCAMOVIL-BPA</option>
+              <option value="TRANSFERMOVIL">TRANSFERMOVIL</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-tertiary whitespace-nowrap">CI</label>
+            <input
+              type="text"
+              placeholder="Buscar CI..."
+              value={ci}
+              onChange={(e) => handleCiChange(e.target.value)}
+              className="w-32 bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-tertiary whitespace-nowrap">Cuenta</label>
+            <input
+              type="text"
+              placeholder="Buscar cuenta..."
+              value={cuenta}
+              onChange={(e) => handleCuentaChange(e.target.value)}
+              className="w-40 bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-tertiary whitespace-nowrap">Ref Origen</label>
+            <input
+              type="text"
+              placeholder="Buscar ref..."
+              value={refOrigen}
+              onChange={(e) => handleRefOrigenChange(e.target.value)}
+              className="w-32 bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-tertiary whitespace-nowrap">Estado</label>
+            <select
+              value={estado}
+              onChange={(e) => { setEstado(e.target.value); setPage(1) }}
+              className="bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-gold/50 transition-colors [color-scheme:dark]"
+            >
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="confirmada">Confirmada</option>
+              <option value="reclamada">Reclamada</option>
+            </select>
+          </div>
         </div>
       </div>
 
