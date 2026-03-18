@@ -103,6 +103,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
         nombre_ordenante: transfer.nombreOrdenante || undefined,
         importe: transfer.importe,
         fecha: formatDate(transfer.fecha),
+        canal_emision: transfer.canalEmision || undefined,
         dias_atras: 7,
       });
       return { transfer, odoo: result };
@@ -211,6 +212,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
           nombre_ordenante: transfer.nombreOrdenante || undefined,
           importe: transfer.importe,
           fecha: formatDate(transfer.fecha),
+          canal_emision: transfer.canalEmision || undefined,
           dias_atras: 7,
         });
 
