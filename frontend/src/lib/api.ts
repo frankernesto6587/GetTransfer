@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -143,8 +143,22 @@ export async function testOdooConnection(data: { api_url: string; api_key: strin
 
 // ── Confirmar Odoo ──
 
-export async function getPendientesOdoo(): Promise<Transferencia[]> {
-  const res = await apiFetch('/api/confirmar-odoo/pendientes')
+export interface PendientesResponse {
+  data: Transferencia[]
+  pagination: PaginationInfo
+  totals: TotalsInfo
+}
+
+export async function getPendientesOdoo(filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; page?: number; limit?: number }): Promise<PendientesResponse> {
+  const params = new URLSearchParams()
+  if (filters?.nombre) params.set('nombre', filters.nombre)
+  if (filters?.ci) params.set('ci', filters.ci)
+  if (filters?.cuenta) params.set('cuenta', filters.cuenta)
+  if (filters?.canal) params.set('canal', filters.canal)
+  if (filters?.page) params.set('page', String(filters.page))
+  if (filters?.limit) params.set('limit', String(filters.limit))
+  const qs = params.toString()
+  const res = await apiFetch(`/api/confirmar-odoo/pendientes${qs ? '?' + qs : ''}`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -204,6 +218,8 @@ export interface TransferenciasOdooParams {
   desde?: number
   hasta?: number
   paymentType?: string
+  orderBy?: string
+  orderDir?: 'asc' | 'desc'
 }
 
 export function buildTransferenciasOdooUrl(params: TransferenciasOdooParams): string {
@@ -222,6 +238,8 @@ export function buildTransferenciasOdooUrl(params: TransferenciasOdooParams): st
   if (params.desde) sp.set('desde', String(params.desde))
   if (params.hasta) sp.set('hasta', String(params.hasta))
   if (params.paymentType) sp.set('paymentType', params.paymentType)
+  if (params.orderBy) sp.set('orderBy', params.orderBy)
+  if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
   return `/api/transferencias-odoo${qs ? `?${qs}` : ''}`
 }

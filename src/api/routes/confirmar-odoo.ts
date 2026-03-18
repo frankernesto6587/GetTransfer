@@ -75,9 +75,19 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
   });
 
   // Get all pending transfers (most recent by bank date)
-  app.get('/api/confirmar-odoo/pendientes', async (_request, _reply) => {
-    const pendientes = await repo.getPendientesPorFecha(50);
-    return pendientes;
+  app.get('/api/confirmar-odoo/pendientes', async (request, _reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const page = query.page ? parseInt(query.page) : undefined;
+    const limit = query.limit ? parseInt(query.limit) : undefined;
+    const result = await repo.getPendientesPorFecha({
+      page,
+      limit,
+      nombre: query.nombre,
+      ci: query.ci,
+      cuenta: query.cuenta,
+      canal: query.canal,
+    });
+    return result;
   });
 
   // Search Odoo match for a specific pending transfer
@@ -183,7 +193,8 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     const parsed = bodySchema.safeParse(request.body || {});
     const cantidad = parsed.success && parsed.data.cantidad ? parsed.data.cantidad : 20;
 
-    const pendientes = await repo.getPendientesPorFecha(cantidad);
+    const result = await repo.getPendientesPorFecha({ limit: cantidad });
+    const pendientes = result.data;
     const resultados = {
       total: pendientes.length,
       confirmadas: 0,

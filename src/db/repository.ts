@@ -94,7 +94,7 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   if (estado === 'confirmada') { where.codigoConfirmacion = { not: null }; where.claimedAt = null; }
   if (estado === 'reclamada') where.claimedAt = { not: null };
 
-  const [data, total] = await Promise.all([
+  const [data, total, aggregates] = await Promise.all([
     prisma.transferencia.findMany({
       where,
       orderBy: orderBy && sortableColumns.includes(orderBy as SortableColumn)
@@ -104,6 +104,11 @@ export async function getAll(filters: TransferenciaFilters = {}) {
       take: limit,
     }),
     prisma.transferencia.count({ where }),
+    prisma.transferencia.aggregate({
+      where,
+      _sum: { importe: true },
+      _count: { id: true },
+    }),
   ]);
 
   return {
@@ -113,6 +118,10 @@ export async function getAll(filters: TransferenciaFilters = {}) {
       limit,
       total,
       pages: Math.ceil(total / limit),
+    },
+    totals: {
+      importe: aggregates._sum.importe ?? 0,
+      cantidad: aggregates._count.id,
     },
   };
 }
@@ -159,12 +168,58 @@ export async function getById(id: number) {
   return prisma.transferencia.findUnique({ where: { id } });
 }
 
-export async function getPendientesPorFecha(limit: number = 20) {
-  return prisma.transferencia.findMany({
-    where: { codigoConfirmacion: null },
-    orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
-    take: limit,
-  });
+export interface PendientesFilters {
+  nombre?: string;
+  ci?: string;
+  cuenta?: string;
+  canal?: string;
+}
+
+export async function getPendientesPorFecha(limitOrFilters?: number | (PendientesFilters & { page?: number; limit?: number }), filters?: PendientesFilters) {
+  // Support both old signature (limit, filters) and new signature (filtersWithPagination)
+  let page = 1;
+  let limit = 50;
+  let filterParams: PendientesFilters = {};
+
+  if (typeof limitOrFilters === 'number') {
+    limit = limitOrFilters;
+    filterParams = filters || {};
+  } else if (limitOrFilters) {
+    const { page: p, limit: l, ...rest } = limitOrFilters;
+    page = p || 1;
+    limit = l || 50;
+    filterParams = rest;
+  }
+
+  const where: Prisma.TransferenciaWhereInput = { codigoConfirmacion: null };
+  if (filterParams.nombre) where.nombreOrdenante = { contains: filterParams.nombre, mode: 'insensitive' };
+  if (filterParams.ci) where.ciOrdenante = { contains: filterParams.ci, mode: 'insensitive' };
+  if (filterParams.cuenta) where.cuentaOrdenante = { contains: filterParams.cuenta, mode: 'insensitive' };
+  if (filterParams.canal) where.canalEmision = { contains: filterParams.canal, mode: 'insensitive' };
+
+  const [data, total, aggregates] = await Promise.all([
+    prisma.transferencia.findMany({
+      where,
+      orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.transferencia.count({ where }),
+    prisma.transferencia.aggregate({
+      where,
+      _sum: { importe: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  return {
+    data,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    totals: {
+      importe: aggregates._sum.importe ?? 0,
+      cantidad: aggregates._count.id,
+    },
+  };
 }
 
 export async function incrementSearchAttempts(id: number) {

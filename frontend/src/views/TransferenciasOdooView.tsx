@@ -1,8 +1,13 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, Filter, RotateCcw } from 'lucide-react'
-import { Pagination } from '../components/Pagination'
+import { useState, useCallback } from 'react'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { Calendar, User, Hash, Wallet, FileText, Code, DollarSign, Eye } from 'lucide-react'
+import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
+import { createColumnHelper } from '@tanstack/react-table'
+import { DataTable, type SortingState } from '../components/DataTable'
 import { transferenciasOdooQuery } from '../lib/api'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { useUIStore } from '../stores/uiStore'
+import { TransferDetailModal } from '../components/TransferShared'
 import type { TransferenciaOdooItem } from '../types'
 
 function today() {
@@ -30,98 +35,168 @@ function formatOdooDate(dateStr: string | null) {
   }
 }
 
-type DatePreset = 'today' | 'week' | 'month' | 'all'
+const col = createColumnHelper<TransferenciaOdooItem>()
+
+function makeOdooColumns(onView: (t: TransferenciaOdooItem) => void) {
+return [
+  col.accessor('order_date', {
+    header: 'Fecha',
+    cell: (info) => <span className="text-secondary whitespace-nowrap">{formatOdooDate(info.getValue())}</span>,
+  }),
+  col.accessor('order_name', {
+    header: 'Orden',
+    cell: (info) => <span className="text-white font-mono whitespace-nowrap">{info.getValue() || '-'}</span>,
+  }),
+  col.accessor('session_name', {
+    header: 'Sesion',
+    cell: (info) => <span className="text-secondary whitespace-nowrap">{info.getValue() || '-'}</span>,
+  }),
+  col.accessor('payment_type', {
+    header: 'Tipo',
+    cell: (info) => {
+      const v = info.getValue()
+      return (
+        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+          v === 'gettransfer' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'
+        }`}>
+          {v || '-'}
+        </span>
+      )
+    },
+  }),
+  col.accessor('card_holder_name', {
+    id: 'nombre',
+    header: 'Nombre',
+    cell: (info) => {
+      const name = info.getValue() || info.row.original.gt_nombre_ordenante || '-'
+      return <span className="text-white whitespace-nowrap max-w-[180px] truncate block" title={name}>{name}</span>
+    },
+  }),
+  col.accessor('card_holder_ci', {
+    id: 'ci',
+    header: 'CI',
+    cell: (info) => <span className="text-secondary font-mono whitespace-nowrap">{info.getValue() || info.row.original.gt_ci_ordenante || '-'}</span>,
+  }),
+  col.accessor('card_number', {
+    id: 'cuenta',
+    header: 'Cuenta',
+    cell: (info) => {
+      const v = info.getValue() || info.row.original.gt_cuenta_ordenante || '-'
+      return <span className="text-secondary font-mono whitespace-nowrap max-w-[140px] truncate block" title={v}>{v}</span>
+    },
+  }),
+  col.accessor('transfer_code', {
+    header: 'Transfer Code',
+    cell: (info) => <span className="text-secondary font-mono whitespace-nowrap">{info.getValue() || '-'}</span>,
+  }),
+  col.accessor('gt_codigo', {
+    header: 'GT Codigo',
+    cell: (info) => {
+      const v = info.getValue()
+      return v
+        ? <span className="text-emerald-400 font-mono">{v}</span>
+        : <span className="text-tertiary">-</span>
+    },
+  }),
+  col.accessor('gt_canal_emision', {
+    id: 'canal',
+    header: 'Canal',
+    cell: (info) => <span className="text-secondary whitespace-nowrap">{info.getValue() || '-'}</span>,
+  }),
+  col.accessor('amount', {
+    header: 'Importe',
+    meta: { align: 'right' },
+    cell: (info) => <span className="text-white font-mono whitespace-nowrap">${info.getValue().toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>,
+  }),
+  col.display({
+    id: 'actions',
+    header: '',
+    cell: (info) => (
+      <button
+        onClick={(e) => { e.stopPropagation(); onView(info.row.original) }}
+        className="p-1.5 rounded-lg hover:bg-gold/15 text-tertiary hover:text-gold transition-colors"
+        title="Ver detalle"
+      >
+        <Eye size={16} />
+      </button>
+    ),
+  }),
+]
+}
 
 export function TransferenciasOdooView() {
+  const queryClient = useQueryClient()
+  const { pageSize, setPageSize } = useUIStore()
+  const limit = pageSize['transferencias-odoo'] || 50
+  const [selected, setSelected] = useState<TransferenciaOdooItem | null>(null)
   const [page, setPage] = useState(1)
+  const [sorting, setSorting] = useState<SortingState>([])
   const [fechaDesde, setFechaDesde] = useState(firstOfMonth())
   const [fechaHasta, setFechaHasta] = useState(today())
-  const [activePreset, setActivePreset] = useState<DatePreset>('month')
+  const [activePreset, setActivePreset] = useState<DatePresetKey>('month')
 
-  // Text filters with debounce
   const [nombre, setNombre] = useState('')
-  const [debouncedNombre, setDebouncedNombre] = useState('')
   const [ci, setCi] = useState('')
-  const [debouncedCi, setDebouncedCi] = useState('')
   const [cuenta, setCuenta] = useState('')
-  const [debouncedCuenta, setDebouncedCuenta] = useState('')
   const [refOrigen, setRefOrigen] = useState('')
-  const [debouncedRefOrigen, setDebouncedRefOrigen] = useState('')
   const [gtCodigo, setGtCodigo] = useState('')
-  const [debouncedGtCodigo, setDebouncedGtCodigo] = useState('')
   const [transferCode, setTransferCode] = useState('')
-  const [debouncedTransferCode, setDebouncedTransferCode] = useState('')
-
-  // Select / number filters
   const [canal, setCanal] = useState('')
   const [paymentType, setPaymentType] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const debouncedNombre = useDebouncedValue(nombre)
+  const debouncedCi = useDebouncedValue(ci)
+  const debouncedCuenta = useDebouncedValue(cuenta)
+  const debouncedRefOrigen = useDebouncedValue(refOrigen)
+  const debouncedGtCodigo = useDebouncedValue(gtCodigo)
+  const debouncedTransferCode = useDebouncedValue(transferCode)
 
-  // Debounce refs
-  const debounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
-  function debounced(key: string, setter: (v: string) => void, value: string) {
-    if (debounceRefs.current[key]) clearTimeout(debounceRefs.current[key])
-    debounceRefs.current[key] = setTimeout(() => { setter(value); setPage(1) }, 300)
-  }
-
-  useEffect(() => {
-    return () => {
-      Object.values(debounceRefs.current).forEach(clearTimeout)
-    }
-  }, [])
-
-  const applyPreset = useCallback((preset: DatePreset) => {
+  const applyPreset = useCallback((preset: DatePresetKey) => {
     setActivePreset(preset)
     setPage(1)
     const t = new Date()
     switch (preset) {
       case 'today':
-        setFechaDesde(today())
-        setFechaHasta(today())
+        setFechaDesde(today()); setFechaHasta(today())
         break
       case 'week': {
         const weekAgo = new Date(t)
         weekAgo.setDate(weekAgo.getDate() - 6)
-        setFechaDesde(weekAgo.toISOString().slice(0, 10))
-        setFechaHasta(today())
+        setFechaDesde(weekAgo.toISOString().slice(0, 10)); setFechaHasta(today())
         break
       }
       case 'month':
-        setFechaDesde(firstOfMonth())
-        setFechaHasta(today())
+        setFechaDesde(firstOfMonth()); setFechaHasta(today())
         break
       case 'all':
-        setFechaDesde('')
-        setFechaHasta('')
+        setFechaDesde(''); setFechaHasta('')
         break
     }
   }, [])
 
-  const hasActiveFilters = useMemo(() => {
-    return debouncedNombre || debouncedCi || debouncedCuenta || debouncedRefOrigen ||
-      debouncedGtCodigo || debouncedTransferCode || canal || paymentType || desde || hasta
-  }, [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, desde, hasta])
-
   const clearFilters = useCallback(() => {
-    setNombre(''); setDebouncedNombre('')
-    setCi(''); setDebouncedCi('')
-    setCuenta(''); setDebouncedCuenta('')
-    setRefOrigen(''); setDebouncedRefOrigen('')
-    setGtCodigo(''); setDebouncedGtCodigo('')
-    setTransferCode(''); setDebouncedTransferCode('')
-    setCanal('')
-    setPaymentType('')
-    setDesde('')
-    setHasta('')
+    setNombre(''); setCi(''); setCuenta(''); setRefOrigen('')
+    setGtCodigo(''); setTransferCode(''); setCanal('')
+    setPaymentType(''); setDesde(''); setHasta('')
     setPage(1)
   }, [])
+
+  // Map column ids to API field names for server-side sort
+  const colIdToSortField: Record<string, string> = {
+    nombre: 'card_holder_name',
+    ci: 'card_holder_ci',
+    cuenta: 'card_number',
+    canal: 'gt_canal_emision',
+  }
+  const sort = sorting[0]
+  const orderBy = sort ? (colIdToSortField[sort.id] ?? sort.id) : undefined
+  const orderDir = sort ? (sort.desc ? 'desc' as const : 'asc' as const) : undefined
 
   const { data, isLoading, isFetching } = useQuery({
     ...transferenciasOdooQuery({
       page,
-      limit: 50,
+      limit,
       fechaDesde: fechaDesde || undefined,
       fechaHasta: fechaHasta || undefined,
       nombre: debouncedNombre || undefined,
@@ -134,18 +209,27 @@ export function TransferenciasOdooView() {
       desde: desde ? Number(desde) : undefined,
       hasta: hasta ? Number(hasta) : undefined,
       paymentType: paymentType || undefined,
+      orderBy,
+      orderDir,
     }),
     placeholderData: keepPreviousData,
   })
 
   const total = data?.pagination?.total ?? 0
+  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, desde, hasta].filter(Boolean).length
 
-  const inputClass = 'bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors'
+  const pageData = data?.data ?? []
+  const pageTotals = pageData.length > 0
+    ? {
+        importe: pageData.reduce((sum, t) => sum + t.amount, 0),
+        cantidad: pageData.length,
+      }
+    : undefined
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-6">
-        <h1 className="font-headline text-3xl font-bold text-white">Transferencias Odoo</h1>
+        <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Transferencias Odoo</h1>
         <p className="text-secondary mt-1">
           {total > 0 ? (
             <>
@@ -162,183 +246,60 @@ export function TransferenciasOdooView() {
       </div>
 
       {/* Filter bar */}
-      <div className="rounded-xl border border-border bg-surface mb-6">
-        {/* Date presets + range */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
-          <Calendar size={16} className="text-tertiary shrink-0" />
-          <div className="flex items-center gap-1 bg-page rounded-lg p-0.5">
-            {([
-              ['today', 'Hoy'],
-              ['week', '7 dias'],
-              ['month', 'Este mes'],
-              ['all', 'Todo'],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => applyPreset(key)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                  activePreset === key
-                    ? 'bg-gold/20 text-gold'
-                    : 'text-tertiary hover:text-secondary'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <span className="text-border">|</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={fechaDesde}
-              onChange={(e) => { setFechaDesde(e.target.value); setActivePreset('' as DatePreset); setPage(1) }}
-              className={`${inputClass} [color-scheme:dark]`}
+      <FilterBar
+        activeFilterCount={activeFilterCount}
+        onClear={clearFilters}
+        resultCount={total}
+        resultLabel="resultados"
+        dateRow={
+          <>
+            <Calendar size={16} className="text-tertiary shrink-0" />
+            <DatePresets active={activePreset} onSelect={applyPreset} />
+            <span className="text-border hidden md:inline">|</span>
+            <FilterDateRange
+              desde={fechaDesde}
+              hasta={fechaHasta}
+              onDesdeChange={(v) => { setFechaDesde(v); setActivePreset('' as DatePresetKey); setPage(1) }}
+              onHastaChange={(v) => { setFechaHasta(v); setActivePreset('' as DatePresetKey); setPage(1) }}
             />
-            <span className="text-tertiary text-xs">—</span>
-            <input
-              type="date"
-              value={fechaHasta}
-              onChange={(e) => { setFechaHasta(e.target.value); setActivePreset('' as DatePreset); setPage(1) }}
-              className={`${inputClass} [color-scheme:dark]`}
-            />
-          </div>
-        </div>
-
-        {/* Nombre + Importe + payment type */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
-          <Filter size={16} className="text-tertiary shrink-0" />
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Nombre</label>
-            <input
-              type="text"
-              placeholder="Buscar nombre..."
-              value={nombre}
-              onChange={(e) => { setNombre(e.target.value); debounced('nombre', setDebouncedNombre, e.target.value) }}
-              className={`w-40 ${inputClass}`}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Importe</label>
-            <input
-              type="number"
-              placeholder="Min"
-              value={desde}
-              onChange={(e) => { setDesde(e.target.value); setPage(1) }}
-              className={`w-24 ${inputClass}`}
-            />
-            <span className="text-tertiary text-xs">—</span>
-            <input
-              type="number"
-              placeholder="Max"
-              value={hasta}
-              onChange={(e) => { setHasta(e.target.value); setPage(1) }}
-              className={`w-24 ${inputClass}`}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Tipo</label>
-            <select
-              value={paymentType}
-              onChange={(e) => { setPaymentType(e.target.value); setPage(1) }}
-              className={`${inputClass} [color-scheme:dark]`}
-            >
-              <option value="">Todos</option>
-              <option value="transfer">Transfer</option>
-              <option value="gettransfer">GetTransfer</option>
-            </select>
-          </div>
-
-          {hasActiveFilters && (
-            <>
-              <span className="text-border">|</span>
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-tertiary hover:text-white transition-colors cursor-pointer"
-              >
-                <RotateCcw size={12} />
-                Limpiar filtros
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* CI, Cuenta, Canal, Ref Origen, GT Código, Transfer Code */}
-        <div className="flex items-center gap-3 px-5 py-3">
-          <Filter size={16} className="text-tertiary shrink-0" />
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">CI</label>
-            <input
-              type="text"
-              placeholder="Buscar CI..."
-              value={ci}
-              onChange={(e) => { setCi(e.target.value); debounced('ci', setDebouncedCi, e.target.value) }}
-              className={`w-32 ${inputClass}`}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Cuenta</label>
-            <input
-              type="text"
-              placeholder="Buscar cuenta..."
-              value={cuenta}
-              onChange={(e) => { setCuenta(e.target.value); debounced('cuenta', setDebouncedCuenta, e.target.value) }}
-              className={`w-40 ${inputClass}`}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Canal</label>
-            <select
+          </>
+        }
+        primaryFilters={
+          <>
+            <FilterInput icon={User} label="Nombre" value={nombre} onChange={(v) => { setNombre(v); setPage(1) }} className="w-full md:w-40" />
+            <FilterInput icon={Hash} label="CI" value={ci} onChange={(v) => { setCi(v); setPage(1) }} className="w-full md:w-32" />
+            <FilterInput icon={Wallet} label="Cuenta" value={cuenta} onChange={(v) => { setCuenta(v); setPage(1) }} className="w-full md:w-40" />
+            <FilterInput icon={FileText} label="Ref Origen" value={refOrigen} onChange={(v) => { setRefOrigen(v); setPage(1) }} className="w-full md:w-32" />
+            <FilterInput icon={Code} label="Transfer Code" value={transferCode} onChange={(v) => { setTransferCode(v); setPage(1) }} className="w-full md:w-32" />
+          </>
+        }
+        secondaryFilters={
+          <>
+            <FilterSelect
               value={canal}
-              onChange={(e) => { setCanal(e.target.value); setPage(1) }}
-              className={`${inputClass} [color-scheme:dark]`}
-            >
-              <option value="">Todos</option>
-              <option value="BANCA MOVIL">BANCA MOVIL</option>
-              <option value="BANCAMOVIL-BPA">BANCAMOVIL-BPA</option>
-              <option value="TRANSFERMOVIL">TRANSFERMOVIL</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Ref Origen</label>
-            <input
-              type="text"
-              placeholder="Buscar ref..."
-              value={refOrigen}
-              onChange={(e) => { setRefOrigen(e.target.value); debounced('refOrigen', setDebouncedRefOrigen, e.target.value) }}
-              className={`w-32 ${inputClass}`}
+              onChange={(v) => { setCanal(v); setPage(1) }}
+              options={[
+                { value: 'BANCA MOVIL', label: 'BANCA MOVIL' },
+                { value: 'BANCAMOVIL-BPA', label: 'BANCAMOVIL-BPA' },
+                { value: 'TRANSFERMOVIL', label: 'TRANSFERMOVIL' },
+              ]}
+              className="w-full md:w-40"
             />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">GT Codigo</label>
-            <input
-              type="text"
-              placeholder="Buscar GT..."
-              value={gtCodigo}
-              onChange={(e) => { setGtCodigo(e.target.value); debounced('gtCodigo', setDebouncedGtCodigo, e.target.value) }}
-              className={`w-28 ${inputClass}`}
+            <FilterSelect
+              value={paymentType}
+              onChange={(v) => { setPaymentType(v); setPage(1) }}
+              options={[
+                { value: 'transfer', label: 'Transfer' },
+                { value: 'gettransfer', label: 'GetTransfer' },
+              ]}
+              className="w-full md:w-36"
             />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-tertiary whitespace-nowrap">Transfer Code</label>
-            <input
-              type="text"
-              placeholder="Buscar code..."
-              value={transferCode}
-              onChange={(e) => { setTransferCode(e.target.value); debounced('transferCode', setDebouncedTransferCode, e.target.value) }}
-              className={`w-28 ${inputClass}`}
-            />
-          </div>
-        </div>
-      </div>
+            <FilterInput icon={DollarSign} label="Importe min" type="number" value={desde} onChange={(v) => { setDesde(v); setPage(1) }} className="w-full md:w-28" />
+            <FilterInput icon={DollarSign} label="Importe max" type="number" value={hasta} onChange={(v) => { setHasta(v); setPage(1) }} className="w-full md:w-28" />
+            <FilterInput icon={Code} label="GT Codigo" value={gtCodigo} onChange={(v) => { setGtCodigo(v); setPage(1) }} className="w-full md:w-28" />
+          </>
+        }
+      />
 
       {/* Table */}
       {isLoading ? (
@@ -346,81 +307,61 @@ export function TransferenciasOdooView() {
           <div className="text-secondary animate-pulse">Cargando transferencias de Odoo...</div>
         </div>
       ) : (
-        <>
-          <div className={`mb-4 transition-opacity duration-150 ${isFetching ? 'opacity-50' : ''}`}>
-            <div className="rounded-xl border border-border bg-surface overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-tertiary">
-                    <th className="px-3 py-2.5 text-left font-medium">Fecha</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Orden</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Sesion</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Tipo</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Nombre</th>
-                    <th className="px-3 py-2.5 text-left font-medium">CI</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Cuenta</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Transfer Code</th>
-                    <th className="px-3 py-2.5 text-left font-medium">GT Codigo</th>
-                    <th className="px-3 py-2.5 text-left font-medium">Canal</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Importe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.data ?? []).length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-8 text-center text-tertiary">
-                        No se encontraron transferencias
-                      </td>
-                    </tr>
-                  ) : (
-                    (data?.data ?? []).map((item: TransferenciaOdooItem) => (
-                      <tr key={item.payment_id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
-                        <td className="px-3 py-2 text-secondary whitespace-nowrap">{formatOdooDate(item.order_date)}</td>
-                        <td className="px-3 py-2 text-white font-mono whitespace-nowrap">{item.order_name || '-'}</td>
-                        <td className="px-3 py-2 text-secondary whitespace-nowrap">{item.session_name || '-'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            item.payment_type === 'gettransfer'
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-blue-500/10 text-blue-400'
-                          }`}>
-                            {item.payment_type || '-'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-white whitespace-nowrap max-w-[180px] truncate" title={item.card_holder_name || item.gt_nombre_ordenante || ''}>
-                          {item.card_holder_name || item.gt_nombre_ordenante || '-'}
-                        </td>
-                        <td className="px-3 py-2 text-secondary font-mono whitespace-nowrap">{item.card_holder_ci || item.gt_ci_ordenante || '-'}</td>
-                        <td className="px-3 py-2 text-secondary font-mono whitespace-nowrap max-w-[140px] truncate" title={item.card_number || item.gt_cuenta_ordenante || ''}>
-                          {item.card_number || item.gt_cuenta_ordenante || '-'}
-                        </td>
-                        <td className="px-3 py-2 text-secondary font-mono whitespace-nowrap">{item.transfer_code || '-'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {item.gt_codigo ? (
-                            <span className="text-emerald-400 font-mono">{item.gt_codigo}</span>
-                          ) : (
-                            <span className="text-tertiary">-</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-secondary whitespace-nowrap">{item.gt_canal_emision || '-'}</td>
-                        <td className="px-3 py-2 text-right text-white font-mono whitespace-nowrap">
-                          ${item.amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <div className={`transition-opacity duration-150 ${isFetching ? 'opacity-50' : ''}`}>
+          <DataTable
+            tableId="transferencias-odoo"
+            data={pageData}
+            columns={makeOdooColumns(setSelected)}
+            sorting={sorting}
+            onSortingChange={(s) => { setSorting(s); setPage(1) }}
+            pagination={data?.pagination}
+            onPageChange={setPage}
+            onLimitChange={(l) => { setPageSize('transferencias-odoo', l); setPage(1) }}
+            totals={data?.totals}
+            pageTotals={pageTotals}
+            alwaysVisibleColumns={['order_date', 'amount']}
+            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['transferencias-odoo'] })}
+            title="Transferencias Odoo"
+            loading={isFetching}
+            mobileCard={(item) => (
+              <div className="px-4 py-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-white font-mono text-sm">{item.order_name || '-'}</span>
+                  <span className="text-secondary text-xs">{formatOdooDate(item.order_date)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-sm truncate mr-2">{item.card_holder_name || item.gt_nombre_ordenante || '-'}</span>
+                  <span className="text-secondary font-mono text-xs shrink-0">{item.card_holder_ci || item.gt_ci_ordenante || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      item.payment_type === 'gettransfer' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'
+                    }`}>
+                      {item.payment_type || '-'}
+                    </span>
+                    {item.gt_canal_emision && <span className="text-tertiary text-xs">{item.gt_canal_emision}</span>}
+                  </div>
+                  <span className="text-white font-mono font-medium">${item.amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
+                </div>
+                {(item.gt_codigo || item.transfer_code) && (
+                  <div className="flex items-center gap-2 text-xs">
+                    {item.gt_codigo && <span className="text-emerald-400 font-mono">GT: {item.gt_codigo}</span>}
+                    {item.transfer_code && <span className="text-secondary font-mono">TX: {item.transfer_code}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+          />
+        </div>
+      )}
 
-          {data?.pagination ? (
-            <Pagination
-              pagination={data.pagination}
-              onPageChange={setPage}
-            />
-          ) : null}
-        </>
+      {selected && (
+        <TransferDetailModal
+          transfer={{ source: 'odoo', data: selected }}
+          onClose={() => setSelected(null)}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['transferencias-odoo'] })}
+        />
       )}
     </div>
   )

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { DollarSign, TrendingUp, ArrowLeftRight } from 'lucide-react'
-import { DailyChart } from '../components/DailyChart'
 import { resumenQuery } from '../lib/api'
 
 export function ReportesView() {
@@ -18,26 +17,21 @@ export function ReportesView() {
   const totales = resumen?.totales ?? { cantidad: 0, total: 0 }
   const promedio = totales.cantidad > 0 ? totales.total / totales.cantidad : 0
 
-  // Top 5 días por cantidad
+  // Top 5 dias por cantidad
   const topDias = [...porDia].sort((a, b) => b.cantidad - a.cantidad).slice(0, 5)
 
-  // Top 5 días por importe
+  // Top 5 dias por importe
   const topImporte = [...porDia].sort((a, b) => b.total - a.total).slice(0, 5)
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-8">
-        <h1 className="font-headline text-3xl font-bold text-white">Reportes</h1>
-        <p className="text-secondary mt-1">Análisis detallado de transferencias</p>
-      </div>
-
-      {/* Chart */}
-      <div className="mb-8">
-        <DailyChart data={porDia} />
+        <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Reportes</h1>
+        <p className="text-secondary mt-1">Analisis detallado de transferencias</p>
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="rounded-xl border border-border bg-surface p-5">
           <div className="flex items-center gap-2 mb-3">
             <ArrowLeftRight size={16} className="text-gold" />
@@ -62,9 +56,9 @@ export function ReportesView() {
       </div>
 
       {/* Rankings */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-xl border border-border bg-surface p-6">
-          <h3 className="font-headline text-lg font-semibold text-white mb-4">Top 5 Días por Cantidad</h3>
+          <h3 className="font-headline text-lg font-semibold text-white mb-4">Top 5 Dias por Cantidad</h3>
           <div className="space-y-3">
             {topDias.map((d, i) => (
               <div key={d.fecha} className="flex items-center justify-between">
@@ -79,7 +73,7 @@ export function ReportesView() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface p-6">
-          <h3 className="font-headline text-lg font-semibold text-white mb-4">Top 5 Días por Importe</h3>
+          <h3 className="font-headline text-lg font-semibold text-white mb-4">Top 5 Dias por Importe</h3>
           <div className="space-y-3">
             {topImporte.map((d, i) => (
               <div key={d.fecha} className="flex items-center justify-between">

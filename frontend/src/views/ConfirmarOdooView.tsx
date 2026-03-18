@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback'
 import {
   CheckCircle,
   AlertCircle,
@@ -9,7 +10,11 @@ import {
   Search,
   Loader2,
   XCircle,
+  User,
+  Hash,
+  Wallet,
 } from 'lucide-react'
+import { FilterBar, FilterInput, FilterSelect } from '../components/filters'
 import {
   getPendientesOdoo,
   buscarOdooMatch,
@@ -49,18 +54,24 @@ export function ConfirmarOdooView() {
   const [autoResult, setAutoResult] = useState<AutoConfirmarResult | null>(null)
   const [autoCantidad, setAutoCantidad] = useState(20)
 
+  // Filters
+  const [filterNombre, setFilterNombre] = useState('')
+  const [filterCi, setFilterCi] = useState('')
+  const [filterCuenta, setFilterCuenta] = useState('')
+  const [filterCanal, setFilterCanal] = useState('')
+
   const transfer = pendientes[currentIndex] ?? null
 
-  const loadPendientes = useCallback(async () => {
+  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string }) => {
     setLoading(true)
     setError('')
     setOdooResult(null)
     setConfirmado(null)
     try {
-      const list = await getPendientesOdoo()
-      setPendientes(list)
+      const result = await getPendientesOdoo(filters)
+      setPendientes(result.data)
       setCurrentIndex(0)
-      if (list.length === 0) {
+      if (result.data.length === 0) {
         setError('No hay transferencias pendientes')
       }
     } catch (err) {
@@ -71,6 +82,27 @@ export function ConfirmarOdooView() {
       setLoading(false)
     }
   }, [])
+
+  const currentFilters = useCallback(() => {
+    const f: { nombre?: string; ci?: string; cuenta?: string; canal?: string } = {}
+    if (filterNombre) f.nombre = filterNombre
+    if (filterCi) f.ci = filterCi
+    if (filterCuenta) f.cuenta = filterCuenta
+    if (filterCanal) f.canal = filterCanal
+    return Object.keys(f).length > 0 ? f : undefined
+  }, [filterNombre, filterCi, filterCuenta, filterCanal])
+
+  const debouncedReload = useDebouncedCallback((filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string }) => {
+    loadPendientes(filters)
+  }, 300)
+
+  const clearFilters = useCallback(() => {
+    setFilterNombre('')
+    setFilterCi('')
+    setFilterCuenta('')
+    setFilterCanal('')
+    loadPendientes()
+  }, [loadPendientes])
 
   // Auto-search when transfer changes
   const searchOdoo = useCallback(async (transferId: number) => {
@@ -165,10 +197,10 @@ export function ConfirmarOdooView() {
   }
 
   return (
-    <div className="p-8 max-w-[1000px]">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 md:p-8 max-w-[1000px] w-full">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="font-headline text-3xl font-bold text-white">Confirmar en Odoo</h1>
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Confirmar en Odoo</h1>
           <p className="text-secondary mt-1">Vincular transferencias GT con pagos POS en Odoo</p>
         </div>
         <div className="flex items-center gap-2">
@@ -191,19 +223,63 @@ export function ConfirmarOdooView() {
         </div>
       </div>
 
+      {/* Filter bar */}
+      <FilterBar
+        activeFilterCount={[filterNombre, filterCi, filterCuenta, filterCanal].filter(Boolean).length}
+        onClear={clearFilters}
+        resultCount={pendientes.length}
+        resultLabel="pendientes"
+        primaryFilters={
+          <>
+            <FilterInput
+              icon={User}
+              label="Nombre"
+              value={filterNombre}
+              onChange={(v) => { setFilterNombre(v); debouncedReload({ ...currentFilters(), nombre: v || undefined }) }}
+              className="w-full md:w-40"
+            />
+            <FilterInput
+              icon={Hash}
+              label="CI"
+              value={filterCi}
+              onChange={(v) => { setFilterCi(v); debouncedReload({ ...currentFilters(), ci: v || undefined }) }}
+              className="w-full md:w-32"
+            />
+            <FilterInput
+              icon={Wallet}
+              label="Cuenta"
+              value={filterCuenta}
+              onChange={(v) => { setFilterCuenta(v); debouncedReload({ ...currentFilters(), cuenta: v || undefined }) }}
+              className="w-full md:w-40"
+            />
+            <FilterSelect
+              value={filterCanal}
+              onChange={(v) => { setFilterCanal(v); loadPendientes({ ...currentFilters(), canal: v || undefined }) }}
+              options={[
+                { value: 'BANCA MOVIL', label: 'BANCA MOVIL' },
+                { value: 'BANCAMOVIL-BPA', label: 'BANCAMOVIL-BPA' },
+                { value: 'TRANSFERMOVIL', label: 'TRANSFERMOVIL' },
+              ]}
+              allLabel="Todos los canales"
+              className="w-full md:w-44"
+            />
+          </>
+        }
+      />
+
       {/* Auto result modal */}
       {autoResult && (
         <div className="rounded-xl border border-border bg-surface p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-headline text-lg font-semibold text-white">Resultado Auto-Confirmacion</h3>
             <button
-              onClick={() => { setAutoResult(null); loadPendientes(); }}
+              onClick={() => { setAutoResult(null); loadPendientes(currentFilters()); }}
               className="text-tertiary hover:text-white transition-colors cursor-pointer"
             >
               <XCircle size={18} />
             </button>
           </div>
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center p-3 rounded-lg bg-emerald-500/10">
               <p className="text-2xl font-bold text-emerald-400">{autoResult.confirmadas}</p>
               <p className="text-xs text-tertiary mt-1">Confirmadas</p>
@@ -264,7 +340,7 @@ export function ConfirmarOdooView() {
 
       {/* Current transfer card */}
       {transfer && (
-        <div className="grid grid-cols-[1fr,1fr] gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr] gap-6">
           {/* Left: GT Transfer data */}
           <div className="rounded-xl border border-border bg-surface p-6">
             <h3 className="font-headline text-lg font-semibold text-white mb-4">Transferencia GT</h3>

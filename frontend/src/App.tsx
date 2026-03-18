@@ -1,46 +1,13 @@
 import { useState } from 'react'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { Outlet } from '@tanstack/react-router'
+import { Menu } from 'lucide-react'
+import { useAuth } from './contexts/AuthContext'
 import { Sidebar } from './components/Sidebar'
-import type { View } from './components/Sidebar'
 import { LoginView } from './views/LoginView'
-import { DashboardView } from './views/DashboardView'
-import { TransferenciasView } from './views/TransferenciasView'
-import { GetCodeView } from './views/GetCodeView'
-import { ConfirmarOdooView } from './views/ConfirmarOdooView'
-import { TransferenciasOdooView } from './views/TransferenciasOdooView'
-import { ReportesView } from './views/ReportesView'
-import { ConfigView } from './views/ConfigView'
-import { AyudaView } from './views/AyudaView'
-import { UsuariosView } from './views/UsuariosView'
 
-const views: Record<View, React.FC> = {
-  dashboard: DashboardView,
-  transferencias: TransferenciasView,
-  getcode: GetCodeView,
-  'confirmar-odoo': ConfirmarOdooView,
-  'transferencias-odoo': TransferenciasOdooView,
-  reportes: ReportesView,
-  configuracion: ConfigView,
-  usuarios: UsuariosView,
-  ayuda: AyudaView,
-}
-
-function AuthenticatedApp() {
-  const [active, setActive] = useState<View>('dashboard')
-  const ActiveView = views[active]
-
-  return (
-    <div className="flex h-screen">
-      <Sidebar active={active} onNavigate={setActive} />
-      <main className="ml-[260px] flex-1 overflow-y-auto">
-        <ActiveView />
-      </main>
-    </div>
-  )
-}
-
-function AppContent() {
+export function RootLayout() {
   const { user, loading } = useAuth()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   if (loading) {
     return (
@@ -55,13 +22,28 @@ function AppContent() {
 
   if (!user) return <LoginView />
 
-  return <AuthenticatedApp />
-}
-
-export function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <div className="flex h-screen">
+      {/* Mobile header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface border-b border-border z-40 flex items-center px-4 gap-3">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 rounded-lg text-secondary hover:text-white hover:bg-white/10 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="w-8 h-8 rounded-lg bg-gold flex items-center justify-center">
+          <span className="font-headline text-sm font-bold text-page">G</span>
+        </div>
+        <span className="font-headline text-base font-semibold tracking-wide text-white">
+          GETTRANSFER
+        </span>
+      </div>
+
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <main className="md:ml-[260px] flex-1 overflow-y-auto pt-14 md:pt-0">
+        <Outlet />
+      </main>
+    </div>
   )
 }

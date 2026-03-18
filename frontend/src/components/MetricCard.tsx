@@ -36,7 +36,7 @@ export function MetricCard({
           />
         </div>
       </div>
-      <p className="font-mono text-2xl font-medium text-white">{value}</p>
+      <p className="font-mono text-lg md:text-2xl font-medium text-white truncate">{value}</p>
       {delta ? (
         <p className="text-xs text-secondary mt-1">{delta}</p>
       ) : null}

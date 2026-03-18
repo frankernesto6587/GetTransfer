@@ -130,9 +130,9 @@ export function GetCodeView() {
   }
 
   return (
-    <div className="p-8 max-w-[900px]">
+    <div className="p-4 md:p-8 max-w-[900px] w-full">
       <div className="mb-8">
-        <h1 className="font-headline text-3xl font-bold text-white">Generar Codigo GT</h1>
+        <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Generar Codigo GT</h1>
         <p className="text-secondary mt-1">Buscar transferencias pendientes y generar codigo de confirmacion</p>
       </div>
 
@@ -151,7 +151,7 @@ export function GetCodeView() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
             <div>
               <span className="text-tertiary">Ordenante</span>
               <p className="text-white">{confirmada.nombreOrdenante}</p>
@@ -226,7 +226,7 @@ export function GetCodeView() {
           {/* Formulario de busqueda */}
           <form onSubmit={handleBuscar} className="rounded-xl border border-border bg-surface p-6 mb-6">
             <h3 className="font-headline text-lg font-semibold text-white mb-4">Datos del cliente</h3>
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Importe</label>
                 <input
@@ -361,37 +361,60 @@ export function GetCodeView() {
               ) : (
                 <div className="divide-y divide-border/50">
                   {results.map((t) => (
-                    <div key={t.id} className="px-6 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-                      <div className="flex-1 grid grid-cols-5 gap-4 text-sm">
-                        <div>
-                          <span className="text-tertiary text-xs block">Fecha</span>
-                          <span className="text-secondary font-mono">{displayFecha(t.fecha)}</span>
-                        </div>
-                        <div>
-                          <span className="text-tertiary text-xs block">Ordenante</span>
-                          <span className="text-white">{t.nombreOrdenante || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-tertiary text-xs block">CI</span>
-                          <span className="text-secondary font-mono">{t.ciOrdenante || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-tertiary text-xs block">Importe</span>
+                    <div key={t.id} className="px-4 md:px-6 py-4 hover:bg-white/[0.02] transition-colors">
+                      {/* Mobile layout */}
+                      <div className="md:hidden space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-secondary font-mono text-sm">{displayFecha(t.fecha)}</span>
                           <span className="text-white font-mono">${t.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
                         </div>
-                        <div>
-                          <span className="text-tertiary text-xs block">Canal</span>
-                          <span className="text-secondary">{t.canalEmision || '—'}</span>
+                        <p className="text-white text-sm truncate">{t.nombreOrdenante || '—'}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-secondary text-xs">{t.canalEmision || '—'}</span>
+                          <span className="text-secondary font-mono text-xs">{t.ciOrdenante || '—'}</span>
                         </div>
+                        <button
+                          onClick={() => handleConfirmar(t.id)}
+                          disabled={confirmingId !== null}
+                          className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium min-h-[44px]"
+                        >
+                          <CheckCircle size={14} />
+                          {confirmingId === t.id ? 'Generando...' : 'Generar Codigo'}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleConfirmar(t.id)}
-                        disabled={confirmingId !== null}
-                        className="ml-4 flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
-                      >
-                        <CheckCircle size={14} />
-                        {confirmingId === t.id ? 'Generando...' : 'Generar Codigo'}
-                      </button>
+                      {/* Desktop layout */}
+                      <div className="hidden md:flex items-center justify-between">
+                        <div className="flex-1 grid grid-cols-5 gap-4 text-sm">
+                          <div>
+                            <span className="text-tertiary text-xs block">Fecha</span>
+                            <span className="text-secondary font-mono">{displayFecha(t.fecha)}</span>
+                          </div>
+                          <div>
+                            <span className="text-tertiary text-xs block">Ordenante</span>
+                            <span className="text-white">{t.nombreOrdenante || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-tertiary text-xs block">CI</span>
+                            <span className="text-secondary font-mono">{t.ciOrdenante || '—'}</span>
+                          </div>
+                          <div>
+                            <span className="text-tertiary text-xs block">Importe</span>
+                            <span className="text-white font-mono">${t.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div>
+                            <span className="text-tertiary text-xs block">Canal</span>
+                            <span className="text-secondary">{t.canalEmision || '—'}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleConfirmar(t.id)}
+                          disabled={confirmingId !== null}
+                          className="ml-4 flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
+                        >
+                          <CheckCircle size={14} />
+                          {confirmingId === t.id ? 'Generando...' : 'Generar Codigo'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

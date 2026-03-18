@@ -36,6 +36,8 @@ const querySchema = z.object({
   desde: z.coerce.number().optional(),
   hasta: z.coerce.number().optional(),
   paymentType: z.string().optional(),
+  orderBy: z.string().optional(),
+  orderDir: z.enum(['asc', 'desc']).optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
@@ -67,6 +69,8 @@ export async function transferenciasOdooRoutes(app: FastifyInstance) {
     if (q.desde !== undefined) body.importe_min = q.desde;
     if (q.hasta !== undefined) body.importe_max = q.hasta;
     if (q.paymentType) body.payment_type = q.paymentType;
+    if (q.orderBy) body.order_by = q.orderBy;
+    if (q.orderDir) body.order_dir = q.orderDir;
 
     try {
       const result = await odooFetch('/api/pos/gettransfer/transferencias', body);

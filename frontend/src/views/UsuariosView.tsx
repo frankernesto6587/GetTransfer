@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UserPlus, Trash2, AlertCircle, Check, Shield } from 'lucide-react'
 import { getUsers, updateUserRole, deactivateUser, getInvitations, createInvitation, deleteInvitation } from '../lib/api'
-import type { User, Invitation, UserRole } from '../types'
+import type { UserRole } from '../types'
 
 const ROLE_LABELS: Record<string, string> = {
   root: 'Root',
@@ -20,90 +21,69 @@ const ROLE_COLORS: Record<string, string> = {
 const ASSIGNABLE_ROLES: UserRole[] = ['admin', 'confirmer', 'viewer']
 
 export function UsuariosView() {
-  const [users, setUsers] = useState<User[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-
-  // Invite form
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('viewer')
-  const [inviting, setInviting] = useState(false)
-
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      const [u, i] = await Promise.all([getUsers(), getInvitations()])
-      setUsers(u)
-      setInvitations(i)
-    } catch {
-      setError('Error al cargar datos')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchData() }, [])
 
   const showSuccess = (msg: string) => {
     setSuccess(msg)
     setTimeout(() => setSuccess(''), 3000)
   }
 
-  const handleRoleChange = async (userId: number, newRole: string) => {
-    setError('')
-    try {
-      await updateUserRole(userId, newRole)
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole as UserRole } : u))
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn: getUsers,
+  })
+
+  const invitationsQuery = useQuery({
+    queryKey: ['invitations'],
+    queryFn: getInvitations,
+  })
+
+  const updateRoleMut = useMutation({
+    mutationFn: ({ id, role }: { id: number; role: string }) => updateUserRole(id, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess('Rol actualizado')
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
+    },
+    onError: (err: any) => setError(err.message),
+  })
 
-  const handleDeactivate = async (userId: number, userName: string) => {
-    if (!confirm(`Desactivar a ${userName}?`)) return
-    setError('')
-    try {
-      await deactivateUser(userId)
-      setUsers(prev => prev.filter(u => u.id !== userId))
+  const deactivateMut = useMutation({
+    mutationFn: (id: number) => deactivateUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       showSuccess('Usuario desactivado')
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
+    },
+    onError: (err: any) => setError(err.message),
+  })
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inviteEmail.trim()) return
-    setInviting(true)
-    setError('')
-    try {
-      const inv = await createInvitation(inviteEmail.trim(), inviteRole)
-      setInvitations(prev => [inv, ...prev])
+  const inviteMut = useMutation({
+    mutationFn: () => createInvitation(inviteEmail.trim(), inviteRole),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] })
       setInviteEmail('')
       setInviteRole('viewer')
       showSuccess('Invitacion enviada')
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setInviting(false)
-    }
-  }
+    },
+    onError: (err: any) => setError(err.message),
+  })
 
-  const handleDeleteInvitation = async (id: number) => {
-    setError('')
-    try {
-      await deleteInvitation(id)
-      setInvitations(prev => prev.filter(i => i.id !== id))
+  const deleteInvMut = useMutation({
+    mutationFn: (id: number) => deleteInvitation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] })
       showSuccess('Invitacion eliminada')
-    } catch (err: any) {
-      setError(err.message)
-    }
-  }
+    },
+    onError: (err: any) => setError(err.message),
+  })
 
-  if (loading) {
+  const users = usersQuery.data ?? []
+  const invitations = invitationsQuery.data ?? []
+
+  if (usersQuery.isLoading) {
     return (
       <div className="p-8 flex items-center gap-3">
         <div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin" />
@@ -112,14 +92,19 @@ export function UsuariosView() {
     )
   }
 
+  const handleDeactivate = (userId: number, userName: string) => {
+    if (!confirm(`Desactivar a ${userName}?`)) return
+    setError('')
+    deactivateMut.mutate(userId)
+  }
+
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl w-full">
       <div className="mb-8">
-        <h1 className="font-headline text-3xl font-bold text-white">Usuarios</h1>
+        <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Usuarios</h1>
         <p className="text-secondary mt-1">Gestiona acceso y roles</p>
       </div>
 
-      {/* Feedback */}
       {error && (
         <div className="flex items-center gap-2 p-3 mb-6 rounded-lg bg-red-500/10 border border-red-500/20">
           <AlertCircle size={16} className="text-red-400 shrink-0" />
@@ -151,12 +136,10 @@ export function UsuariosView() {
                   <span className="text-xs text-secondary">{u.name?.[0]?.toUpperCase() || '?'}</span>
                 </div>
               )}
-
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white truncate">{u.name || u.email}</p>
                 <p className="text-xs text-tertiary truncate">{u.email}</p>
               </div>
-
               {u.role === 'root' ? (
                 <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${ROLE_COLORS.root}`}>
                   {ROLE_LABELS.root}
@@ -164,7 +147,7 @@ export function UsuariosView() {
               ) : (
                 <select
                   value={u.role}
-                  onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                  onChange={(e) => { setError(''); updateRoleMut.mutate({ id: u.id, role: e.target.value }) }}
                   className="bg-page border border-border rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-gold/50 transition-colors cursor-pointer"
                 >
                   {ASSIGNABLE_ROLES.map((r) => (
@@ -172,7 +155,6 @@ export function UsuariosView() {
                   ))}
                 </select>
               )}
-
               {u.role !== 'root' && (
                 <button
                   onClick={() => handleDeactivate(u.id, u.name || u.email)}
@@ -194,42 +176,25 @@ export function UsuariosView() {
           <h2 className="font-headline text-lg font-semibold text-white">Invitaciones</h2>
         </div>
 
-        {/* Invite form */}
-        <form onSubmit={handleInvite} className="flex items-end gap-3 mb-6">
+        <form onSubmit={(e) => { e.preventDefault(); if (inviteEmail.trim()) inviteMut.mutate() }} className="flex flex-col md:flex-row items-stretch md:items-end gap-3 mb-6">
           <div className="flex-1">
             <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Email</label>
-            <input
-              type="email"
-              placeholder="usuario@gmail.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-              className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors"
-            />
+            <input type="email" placeholder="usuario@gmail.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors" />
           </div>
           <div>
             <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Rol</label>
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as UserRole)}
-              className="bg-page border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50 transition-colors cursor-pointer"
-            >
+            <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as UserRole)} className="w-full md:w-auto bg-page border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gold/50 transition-colors cursor-pointer">
               {ASSIGNABLE_ROLES.map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS[r]}</option>
               ))}
             </select>
           </div>
-          <button
-            type="submit"
-            disabled={inviting}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors disabled:opacity-40 cursor-pointer"
-          >
+          <button type="submit" disabled={inviteMut.isPending} className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors disabled:opacity-40 cursor-pointer w-full md:w-auto">
             <UserPlus size={14} />
-            {inviting ? 'Invitando...' : 'Invitar'}
+            {inviteMut.isPending ? 'Invitando...' : 'Invitar'}
           </button>
         </form>
 
-        {/* Pending invitations */}
         {invitations.length > 0 ? (
           <div className="space-y-2">
             {invitations.map((inv) => (
@@ -244,7 +209,7 @@ export function UsuariosView() {
                   {ROLE_LABELS[inv.role] || inv.role}
                 </span>
                 <button
-                  onClick={() => handleDeleteInvitation(inv.id)}
+                  onClick={() => { setError(''); deleteInvMut.mutate(inv.id) }}
                   className="p-1.5 rounded-md text-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                   title="Eliminar invitacion"
                 >

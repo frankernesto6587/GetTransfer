@@ -41,9 +41,15 @@ export interface PaginationInfo {
   pages: number
 }
 
+export interface TotalsInfo {
+  importe: number
+  cantidad: number
+}
+
 export interface TransferenciasResponse {
   data: Transferencia[]
   pagination: PaginationInfo
+  totals?: TotalsInfo
 }
 
 export interface DiaStat {
@@ -167,6 +173,7 @@ export interface TransferenciaOdooItem {
 export interface TransferenciasOdooResponse {
   data: TransferenciaOdooItem[]
   pagination: PaginationInfo
+  totals?: TotalsInfo
 }
 
 export interface AutoConfirmarDetalle {
@@ -188,3 +195,7 @@ export interface AutoConfirmarResult {
   errores: number
   detalle: AutoConfirmarDetalle[]
 }
+
+export type TransferDetailData =
+  | { source: 'bandec'; data: Transferencia }
+  | { source: 'odoo'; data: TransferenciaOdooItem }
