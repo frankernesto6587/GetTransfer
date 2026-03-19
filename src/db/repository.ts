@@ -178,7 +178,7 @@ export interface PendientesFilters {
 export async function getPendientesPorFecha(limitOrFilters?: number | (PendientesFilters & { page?: number; limit?: number }), filters?: PendientesFilters) {
   // Support both old signature (limit, filters) and new signature (filtersWithPagination)
   let page = 1;
-  let limit = 50;
+  let limit = 0;
   let filterParams: PendientesFilters = {};
 
   if (typeof limitOrFilters === 'number') {
@@ -187,7 +187,7 @@ export async function getPendientesPorFecha(limitOrFilters?: number | (Pendiente
   } else if (limitOrFilters) {
     const { page: p, limit: l, ...rest } = limitOrFilters;
     page = p || 1;
-    limit = l || 50;
+    limit = l ?? 0;
     filterParams = rest;
   }
 
@@ -201,8 +201,7 @@ export async function getPendientesPorFecha(limitOrFilters?: number | (Pendiente
     prisma.transferencia.findMany({
       where,
       orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
+      ...(limit > 0 ? { skip: (page - 1) * limit, take: limit } : {}),
     }),
     prisma.transferencia.count({ where }),
     prisma.transferencia.aggregate({
@@ -214,7 +213,7 @@ export async function getPendientesPorFecha(limitOrFilters?: number | (Pendiente
 
   return {
     data,
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    pagination: { page, limit, total, pages: limit > 0 ? Math.ceil(total / limit) : 1 },
     totals: {
       importe: aggregates._sum.importe ?? 0,
       cantidad: aggregates._count.id,
@@ -226,13 +225,13 @@ const LEGACY_CUTOFF = new Date('2026-03-12');
 
 export async function getPendientesLegacy(filtersWithPagination?: PendientesFilters & { page?: number; limit?: number }) {
   let page = 1;
-  let limit = 50;
+  let limit = 0;
   let filterParams: PendientesFilters = {};
 
   if (filtersWithPagination) {
     const { page: p, limit: l, ...rest } = filtersWithPagination;
     page = p || 1;
-    limit = l || 50;
+    limit = l ?? 0;
     filterParams = rest;
   }
 
@@ -250,8 +249,7 @@ export async function getPendientesLegacy(filtersWithPagination?: PendientesFilt
     prisma.transferencia.findMany({
       where,
       orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * limit,
-      take: limit,
+      ...(limit > 0 ? { skip: (page - 1) * limit, take: limit } : {}),
     }),
     prisma.transferencia.count({ where }),
     prisma.transferencia.aggregate({
@@ -263,7 +261,7 @@ export async function getPendientesLegacy(filtersWithPagination?: PendientesFilt
 
   return {
     data,
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    pagination: { page, limit, total, pages: limit > 0 ? Math.ceil(total / limit) : 1 },
     totals: {
       importe: aggregates._sum.importe ?? 0,
       cantidad: aggregates._count.id,
