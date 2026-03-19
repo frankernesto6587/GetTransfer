@@ -33,6 +33,7 @@ export interface TransferenciasParams {
   ci?: string
   cuenta?: string
   refOrigen?: string
+  codigo?: string
   estado?: string
   orderBy?: string
   orderDir?: 'asc' | 'desc'
@@ -52,6 +53,7 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   if (params.ci) sp.set('ci', params.ci)
   if (params.cuenta) sp.set('cuenta', params.cuenta)
   if (params.refOrigen) sp.set('refOrigen', params.refOrigen)
+  if (params.codigo) sp.set('codigo', params.codigo)
   if (params.estado) sp.set('estado', params.estado)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
   if (params.orderDir) sp.set('orderDir', params.orderDir)

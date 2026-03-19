@@ -13,6 +13,7 @@ const querySchema = z.object({
   ci: z.string().optional(),
   cuenta: z.string().optional(),
   refOrigen: z.string().optional(),
+  codigo: z.string().optional(),
   estado: z.enum(['pendiente', 'confirmada', 'reclamada']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(50),

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useSearch } from '@tanstack/react-router'
-import { Calendar, Eye, User, Hash, Wallet, FileText, DollarSign } from 'lucide-react'
+import { Calendar, Eye, User, Hash, Wallet, FileText, DollarSign, Code } from 'lucide-react'
 import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -133,6 +133,7 @@ export function TransferenciasView() {
   const [ci, setCi] = useState(searchParams.ci)
   const [cuenta, setCuenta] = useState(searchParams.cuenta)
   const [refOrigen, setRefOrigen] = useState(searchParams.refOrigen)
+  const [codigo, setCodigo] = useState(searchParams.codigo)
   const [estado, setEstado] = useState(searchParams.estado)
   const [sorting, setSorting] = useState<SortingState>([])
   const [activePreset, setActivePreset] = useState<DatePresetKey | ''>(
@@ -146,6 +147,7 @@ export function TransferenciasView() {
   const debouncedCi = useDebouncedValue(ci)
   const debouncedCuenta = useDebouncedValue(cuenta)
   const debouncedRefOrigen = useDebouncedValue(refOrigen)
+  const debouncedCodigo = useDebouncedValue(codigo)
 
   const applyPreset = useCallback((preset: DatePresetKey) => {
     setActivePreset(preset)
@@ -173,7 +175,7 @@ export function TransferenciasView() {
     setFechaHasta(fh)
   }, [])
 
-  const activeFilterCount = [debouncedSearch, desde, hasta, canal, debouncedCi, debouncedCuenta, debouncedRefOrigen, estado].filter(Boolean).length
+  const activeFilterCount = [debouncedSearch, desde, hasta, canal, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedCodigo, estado].filter(Boolean).length
 
   const clearFilters = useCallback(() => {
     setSearch('')
@@ -183,6 +185,7 @@ export function TransferenciasView() {
     setCi('')
     setCuenta('')
     setRefOrigen('')
+    setCodigo('')
     setEstado('')
     setPage(1)
   }, [])
@@ -201,6 +204,7 @@ export function TransferenciasView() {
       ci: debouncedCi || undefined,
       cuenta: debouncedCuenta || undefined,
       refOrigen: debouncedRefOrigen || undefined,
+      codigo: debouncedCodigo || undefined,
       estado: estado || undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
@@ -269,6 +273,7 @@ export function TransferenciasView() {
         }
         secondaryFilters={
           <>
+            <FilterInput icon={Code} label="GT Codigo" value={codigo} onChange={(v) => { setCodigo(v); setPage(1) }} className="w-full md:w-32" />
             <FilterSelect
               value={canal}
               onChange={(v) => { setCanal(v); setPage(1) }}

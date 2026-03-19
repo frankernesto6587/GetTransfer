@@ -24,6 +24,7 @@ export interface TransferenciaFilters {
   ci?: string;
   cuenta?: string;
   refOrigen?: string;
+  codigo?: string;
   estado?: 'pendiente' | 'confirmada' | 'reclamada';
   page?: number;
   limit?: number;
@@ -69,7 +70,7 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
-  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, estado, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
+  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, codigo, estado, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
 
   const where: Prisma.TransferenciaWhereInput = {};
 
@@ -90,6 +91,7 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   if (ci) where.ciOrdenante = { contains: ci, mode: 'insensitive' };
   if (cuenta) where.cuentaOrdenante = { contains: cuenta, mode: 'insensitive' };
   if (refOrigen) where.refOrigen = { contains: refOrigen, mode: 'insensitive' };
+  if (codigo) where.codigoConfirmacion = { contains: codigo, mode: 'insensitive' };
   if (estado === 'pendiente') where.codigoConfirmacion = null;
   if (estado === 'confirmada') { where.codigoConfirmacion = { not: null }; where.claimedAt = null; }
   if (estado === 'reclamada') where.claimedAt = { not: null };

@@ -42,6 +42,7 @@ const transferenciasRoute = createRoute({
     ci: (search.ci as string) || '',
     cuenta: (search.cuenta as string) || '',
     refOrigen: (search.refOrigen as string) || '',
+    codigo: (search.codigo as string) || '',
     estado: (search.estado as string) || '',
   }),
 })

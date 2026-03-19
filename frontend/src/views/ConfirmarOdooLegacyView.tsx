@@ -483,7 +483,18 @@ function LegacyPaymentCard({
   return (
     <div className="rounded-lg border border-border/50 bg-white/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-white text-sm font-medium">{match.order_name}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-white text-sm font-medium">{match.order_name}</span>
+          {match.dias_diferencia !== null && match.dias_diferencia !== undefined && (
+            <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${
+              match.dias_diferencia === 0 ? 'bg-blue-500/20 text-blue-400' :
+              match.dias_diferencia <= 2 ? 'bg-emerald-500/20 text-emerald-400' :
+              'bg-amber-500/20 text-amber-400'
+            }`}>
+              {match.dias_diferencia}
+            </span>
+          )}
+        </div>
         <span className="px-2 py-0.5 rounded text-xs bg-orange-500/15 text-orange-400">
           Nivel {match.nivel_confianza} — {nivelLabels[match.nivel_confianza] || ''}
         </span>
