@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { X, Unlock } from 'lucide-react'
+import { X, Unlock, Pencil, Save, XCircle } from 'lucide-react'
 import type { TransferDetailData } from '../types'
-import { liberarTransferencia } from '../lib/api'
+import { liberarTransferencia, updateOdooPayment } from '../lib/api'
 
 /** YYYY-MM-DD → DD/MM/YYYY */
 export function displayFecha(f: string) {
@@ -52,8 +52,56 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
   const [liberando, setLiberando] = useState(false)
   const [liberarError, setLiberarError] = useState('')
 
+  // Odoo inline editing
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [editFields, setEditFields] = useState({ card_holder_ci: '', card_number: '', transfer_code: '' })
+
   const { source, data } = transfer
   const isBandec = source === 'bandec'
+
+  const startEditing = () => {
+    if (isBandec) return
+    setEditFields({
+      card_holder_ci: data.card_holder_ci || '',
+      card_number: data.card_number || '',
+      transfer_code: data.transfer_code || '',
+    })
+    setEditError('')
+    setEditing(true)
+  }
+
+  const cancelEditing = () => {
+    setEditing(false)
+    setEditError('')
+  }
+
+  const handleSaveEdit = async () => {
+    if (isBandec) return
+    setSaving(true)
+    setEditError('')
+    try {
+      const changed: Record<string, string> = {}
+      if (editFields.card_holder_ci !== (data.card_holder_ci || '')) changed.card_holder_ci = editFields.card_holder_ci
+      if (editFields.card_number !== (data.card_number || '')) changed.card_number = editFields.card_number
+      if (editFields.transfer_code !== (data.transfer_code || '')) changed.transfer_code = editFields.transfer_code
+
+      if (Object.keys(changed).length === 0) {
+        setEditing(false)
+        return
+      }
+
+      await updateOdooPayment(data.payment_id, changed)
+      onRefresh?.()
+      setEditing(false)
+      onClose()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Error al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Common values
   const importe = isBandec ? data.importe : data.amount
@@ -144,12 +192,80 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
           {/* Datos Odoo - only for odoo source */}
           {!isBandec && (
             <div>
-              <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Datos Odoo</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs uppercase tracking-wider text-tertiary font-medium">Datos Odoo</h4>
+                {!editing ? (
+                  <button
+                    onClick={startEditing}
+                    className="p-1 rounded hover:bg-white/10 text-tertiary hover:text-white transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={saving}
+                      className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 transition-colors disabled:opacity-40"
+                      title="Guardar"
+                    >
+                      <Save size={14} />
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      disabled={saving}
+                      className="p-1 rounded hover:bg-white/10 text-secondary hover:text-white transition-colors disabled:opacity-40"
+                      title="Cancelar"
+                    >
+                      <XCircle size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {editError && (
+                <div className="text-red-400 text-sm mb-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  {editError}
+                </div>
+              )}
               <div className="bg-page rounded-lg px-4 py-1">
                 <DetailRow label="Orden" value={data.order_name} mono />
                 <DetailRow label="Sesion" value={data.session_name} />
                 <DetailRow label="Tipo Pago" value={data.payment_type} />
-                <DetailRow label="Transfer Code" value={data.transfer_code} mono />
+                {editing ? (
+                  <>
+                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                      <span className="text-secondary text-sm">CI</span>
+                      <input
+                        value={editFields.card_holder_ci}
+                        onChange={(e) => setEditFields(f => ({ ...f, card_holder_ci: e.target.value }))}
+                        className="bg-surface border border-border rounded px-2 py-1 text-white text-sm font-mono w-48 text-right focus:outline-none focus:border-gold/50"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                      <span className="text-secondary text-sm">Cuenta</span>
+                      <input
+                        value={editFields.card_number}
+                        onChange={(e) => setEditFields(f => ({ ...f, card_number: e.target.value }))}
+                        className="bg-surface border border-border rounded px-2 py-1 text-white text-sm font-mono w-48 text-right focus:outline-none focus:border-gold/50"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-border/50">
+                      <span className="text-secondary text-sm">Transfer Code</span>
+                      <input
+                        value={editFields.transfer_code}
+                        onChange={(e) => setEditFields(f => ({ ...f, transfer_code: e.target.value }))}
+                        className="bg-surface border border-border rounded px-2 py-1 text-white text-sm font-mono w-48 text-right focus:outline-none focus:border-gold/50"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <DetailRow label="CI" value={data.card_holder_ci} mono />
+                    <DetailRow label="Cuenta" value={data.card_number} mono />
+                    <DetailRow label="Transfer Code" value={data.transfer_code} mono />
+                  </>
+                )}
                 <DetailRow label="GT Codigo" value={data.gt_codigo} mono />
               </div>
             </div>

@@ -293,6 +293,25 @@ export const transferenciasOdooQuery = (params: TransferenciasOdooParams) => {
   }
 }
 
+// ── Update Odoo Payment ──
+
+export async function updateOdooPayment(paymentId: number, fields: {
+  card_holder_ci?: string
+  card_number?: string
+  transfer_code?: string
+}): Promise<{ success: boolean; payment_id: number }> {
+  const res = await apiFetch(`/api/transferencias-odoo/${paymentId}/editar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 // ── Token API ──
 
 export async function getActiveToken(): Promise<{ token: ApiToken | null }> {

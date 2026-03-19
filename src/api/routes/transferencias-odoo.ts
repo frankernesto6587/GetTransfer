@@ -45,6 +45,30 @@ const querySchema = z.object({
 export async function transferenciasOdooRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('admin', 'confirmer'));
 
+  // POST proxy — update payment fields (CI, cuenta, transfer_code)
+  app.post('/api/transferencias-odoo/:paymentId/editar', async (request, reply) => {
+    const { paymentId } = request.params as { paymentId: string };
+    const body = request.body as Record<string, unknown>;
+
+    const allowed = ['card_holder_ci', 'card_number', 'transfer_code'];
+    const fields: Record<string, unknown> = { payment_id: Number(paymentId) };
+    for (const key of allowed) {
+      if (body[key] !== undefined) fields[key] = body[key];
+    }
+
+    if (Object.keys(fields).length <= 1) {
+      return reply.status(400).send({ error: 'Debe enviar al menos un campo: card_holder_ci, card_number, transfer_code' });
+    }
+
+    try {
+      const result = await odooFetch('/api/pos/gettransfer/editar-payment', fields);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      return reply.status(502).send({ error: `Error actualizando payment en Odoo: ${message}` });
+    }
+  });
+
   app.get('/api/transferencias-odoo', async (request, reply) => {
     const parsed = querySchema.safeParse(request.query);
     if (!parsed.success) {
