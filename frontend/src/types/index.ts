@@ -176,6 +176,18 @@ export interface TransferenciasOdooResponse {
   totals?: TotalsInfo
 }
 
+export interface OdooLegacyPaymentMatch extends OdooPaymentMatch {
+  partner_name: string | null
+  partner_ci: string | null
+}
+
+export interface OdooLegacyMatchResponse {
+  match_auto: boolean
+  nivel_confianza: number | null
+  resultado: OdooLegacyPaymentMatch | null
+  candidatos: OdooLegacyPaymentMatch[]
+}
+
 export interface AutoConfirmarDetalle {
   id: number
   nombreOrdenante: string

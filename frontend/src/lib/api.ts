@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -193,6 +193,47 @@ export async function autoConfirmarOdoo(cantidad: number = 20): Promise<AutoConf
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ cantidad }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+// ── Confirmar Odoo Legacy ──
+
+export async function getPendientesOdooLegacy(filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; page?: number; limit?: number }): Promise<PendientesResponse> {
+  const params = new URLSearchParams()
+  if (filters?.nombre) params.set('nombre', filters.nombre)
+  if (filters?.ci) params.set('ci', filters.ci)
+  if (filters?.cuenta) params.set('cuenta', filters.cuenta)
+  if (filters?.canal) params.set('canal', filters.canal)
+  if (filters?.page) params.set('page', String(filters.page))
+  if (filters?.limit) params.set('limit', String(filters.limit))
+  const qs = params.toString()
+  const res = await apiFetch(`/api/confirmar-odoo-legacy/pendientes${qs ? '?' + qs : ''}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function buscarOdooLegacyMatch(transferId: number): Promise<{ transfer: Transferencia; odoo: OdooLegacyMatchResponse }> {
+  const res = await apiFetch(`/api/confirmar-odoo-legacy/pendiente/${transferId}/buscar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function confirmarOdooLegacy(transferId: number, paymentId: number): Promise<{ confirmed: Transferencia; odoo: { success: boolean; order_name?: string; message?: string } }> {
+  const res = await apiFetch(`/api/confirmar-odoo-legacy/pendiente/${transferId}/confirmar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payment_id: paymentId }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

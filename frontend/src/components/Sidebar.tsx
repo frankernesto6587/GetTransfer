@@ -9,6 +9,7 @@ import {
   KeyRound,
   Link as LinkIcon,
   Database,
+  Clock,
 } from 'lucide-react'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { icon: ArrowLeftRight, label: 'Transferencias', to: '/transferencias' },
   { icon: KeyRound, label: 'GetCode', to: '/getcode', requireConfirm: true },
   { icon: LinkIcon, label: 'Confirmar Odoo', to: '/confirmar-odoo', requireConfirm: true },
+  { icon: Clock, label: 'Odoo Legacy', to: '/confirmar-odoo-legacy', requireConfirm: true },
   { icon: Database, label: 'Transferencias Odoo', to: '/transferencias-odoo', requireConfirm: true },
   { icon: BarChart3, label: 'Reportes', to: '/reportes' },
   { icon: Settings, label: 'Configuracion', to: '/configuracion', requireAdmin: true },

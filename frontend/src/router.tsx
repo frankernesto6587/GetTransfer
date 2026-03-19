@@ -8,6 +8,7 @@ import { DashboardView } from './views/DashboardView'
 import { TransferenciasView } from './views/TransferenciasView'
 import { GetCodeView } from './views/GetCodeView'
 import { ConfirmarOdooView } from './views/ConfirmarOdooView'
+import { ConfirmarOdooLegacyView } from './views/ConfirmarOdooLegacyView'
 import { TransferenciasOdooView } from './views/TransferenciasOdooView'
 import { ReportesView } from './views/ReportesView'
 import { ConfigView } from './views/ConfigView'
@@ -55,6 +56,12 @@ const confirmarOdooRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/confirmar-odoo',
   component: ConfirmarOdooView,
+})
+
+const confirmarOdooLegacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/confirmar-odoo-legacy',
+  component: ConfirmarOdooLegacyView,
 })
 
 const transferenciasOdooRoute = createRoute({
@@ -108,6 +115,7 @@ const routeTree = rootRoute.addChildren([
   transferenciasRoute,
   getCodeRoute,
   confirmarOdooRoute,
+  confirmarOdooLegacyRoute,
   transferenciasOdooRoute,
   reportesRoute,
   configRoute,

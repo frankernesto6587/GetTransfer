@@ -222,6 +222,55 @@ export async function getPendientesPorFecha(limitOrFilters?: number | (Pendiente
   };
 }
 
+const LEGACY_CUTOFF = new Date('2026-03-12');
+
+export async function getPendientesLegacy(filtersWithPagination?: PendientesFilters & { page?: number; limit?: number }) {
+  let page = 1;
+  let limit = 50;
+  let filterParams: PendientesFilters = {};
+
+  if (filtersWithPagination) {
+    const { page: p, limit: l, ...rest } = filtersWithPagination;
+    page = p || 1;
+    limit = l || 50;
+    filterParams = rest;
+  }
+
+  const where: Prisma.TransferenciaWhereInput = {
+    codigoConfirmacion: null,
+    claimedAt: null,
+    fecha: { lt: LEGACY_CUTOFF },
+  };
+  if (filterParams.nombre) where.nombreOrdenante = { contains: filterParams.nombre, mode: 'insensitive' };
+  if (filterParams.ci) where.ciOrdenante = { contains: filterParams.ci, mode: 'insensitive' };
+  if (filterParams.cuenta) where.cuentaOrdenante = { contains: filterParams.cuenta, mode: 'insensitive' };
+  if (filterParams.canal) where.canalEmision = { contains: filterParams.canal, mode: 'insensitive' };
+
+  const [data, total, aggregates] = await Promise.all([
+    prisma.transferencia.findMany({
+      where,
+      orderBy: [{ searchAttempts: 'asc' }, { fecha: 'desc' }, { id: 'desc' }],
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.transferencia.count({ where }),
+    prisma.transferencia.aggregate({
+      where,
+      _sum: { importe: true },
+      _count: { id: true },
+    }),
+  ]);
+
+  return {
+    data,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    totals: {
+      importe: aggregates._sum.importe ?? 0,
+      cantidad: aggregates._count.id,
+    },
+  };
+}
+
 export async function incrementSearchAttempts(id: number) {
   return prisma.transferencia.update({
     where: { id },
