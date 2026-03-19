@@ -185,6 +185,36 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     }
   });
 
+  // Desmachar: undo confirm (clear both Odoo gt_* and GT confirmation fields)
+  app.post('/api/confirmar-odoo/pendiente/:id/desmachar', async (request, reply) => {
+    const parsed = idSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'ID invalido' });
+    }
+
+    const transfer = await repo.getById(parsed.data.id);
+    if (!transfer) {
+      return reply.status(404).send({ error: 'Transferencia no encontrada' });
+    }
+    if (!transfer.codigoConfirmacion) {
+      return reply.status(409).send({ error: 'Transferencia no esta confirmada' });
+    }
+
+    // Step 1: Clear Odoo gt_* fields first
+    try {
+      await odooFetch('/api/pos/gettransfer/desmachar', {
+        gt_codigo: transfer.codigoConfirmacion,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      return reply.status(502).send({ error: `Error desmachando en Odoo: ${message}` });
+    }
+
+    // Step 2: Clear GT confirmation fields (only if Odoo succeeded)
+    const updated = await repo.desmacharTransferencia(parsed.data.id);
+    return updated;
+  });
+
   // Auto-process pending transfers
   app.post('/api/confirmar-odoo/auto', async (request, _reply) => {
     const bodySchema = z.object({

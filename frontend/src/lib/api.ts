@@ -188,6 +188,15 @@ export async function confirmarOdoo(transferId: number, paymentId: number): Prom
   return res.json()
 }
 
+export async function desmacharTransferencia(transferId: number): Promise<Transferencia> {
+  const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/desmachar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function autoConfirmarOdoo(cantidad: number = 20): Promise<AutoConfirmarResult> {
   const res = await apiFetch('/api/confirmar-odoo/auto', {
     method: 'POST',

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { X, Unlock, Pencil, Save, XCircle } from 'lucide-react'
+import { X, Unlock, Unlink, Pencil, Save, XCircle } from 'lucide-react'
 import type { TransferDetailData } from '../types'
-import { liberarTransferencia, updateOdooPayment } from '../lib/api'
+import { liberarTransferencia, desmacharTransferencia, updateOdooPayment } from '../lib/api'
 
 /** YYYY-MM-DD → DD/MM/YYYY */
 export function displayFecha(f: string) {
@@ -51,6 +51,10 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
   const [confirmLiberar, setConfirmLiberar] = useState(false)
   const [liberando, setLiberando] = useState(false)
   const [liberarError, setLiberarError] = useState('')
+
+  const [confirmDesmachar, setConfirmDesmachar] = useState(false)
+  const [desmachando, setDesmachando] = useState(false)
+  const [desmacharError, setDesmacharError] = useState('')
 
   // Odoo inline editing
   const [editing, setEditing] = useState(false)
@@ -129,6 +133,22 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
       setLiberarError(err instanceof Error ? err.message : 'Error al liberar')
     } finally {
       setLiberando(false)
+    }
+  }
+
+  const handleDesmachar = async () => {
+    if (!isBandec) return
+    if (!data.codigoConfirmacion) return
+    setDesmachando(true)
+    setDesmacharError('')
+    try {
+      await desmacharTransferencia(data.id)
+      onRefresh?.()
+      onClose()
+    } catch (err) {
+      setDesmacharError(err instanceof Error ? err.message : 'Error al desmachar')
+    } finally {
+      setDesmachando(false)
     }
   }
 
@@ -302,26 +322,27 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
             </div>
           )}
 
-          {/* Liberar button - only when claimed (bandec only) */}
-          {isBandec && data.claimedAt && (
-            <div className="pt-2">
-              {liberarError && (
-                <div className="text-red-400 text-sm mb-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                  {liberarError}
+          {/* Action buttons - bandec only when confirmed */}
+          {isBandec && data.codigoConfirmacion && (
+            <div className="pt-2 space-y-3">
+              {/* Desmachar button */}
+              {desmacharError && (
+                <div className="text-red-400 text-sm p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                  {desmacharError}
                 </div>
               )}
-              {confirmLiberar ? (
+              {confirmDesmachar ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-red-400">Liberar esta transferencia? Podra ser reclamada nuevamente.</span>
+                  <span className="text-sm text-amber-400">Desmachar? Se limpiaran los datos GT en Odoo y la confirmacion en GT.</span>
                   <button
-                    onClick={handleLiberar}
-                    disabled={liberando}
-                    className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm cursor-pointer disabled:opacity-40"
+                    onClick={handleDesmachar}
+                    disabled={desmachando}
+                    className="px-3 py-1.5 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors text-sm cursor-pointer disabled:opacity-40"
                   >
-                    {liberando ? 'Liberando...' : 'Confirmar'}
+                    {desmachando ? 'Desmachando...' : 'Confirmar'}
                   </button>
                   <button
-                    onClick={() => setConfirmLiberar(false)}
+                    onClick={() => setConfirmDesmachar(false)}
                     className="px-3 py-1.5 bg-white/5 text-secondary rounded-lg hover:bg-white/10 transition-colors text-sm cursor-pointer"
                   >
                     Cancelar
@@ -329,12 +350,49 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
                 </div>
               ) : (
                 <button
-                  onClick={() => setConfirmLiberar(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer text-sm w-full justify-center"
+                  onClick={() => setConfirmDesmachar(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500/20 transition-colors cursor-pointer text-sm w-full justify-center"
                 >
-                  <Unlock size={14} />
-                  Liberar Transferencia
+                  <Unlink size={14} />
+                  Desmachar Transferencia
                 </button>
+              )}
+
+              {/* Liberar button - only when claimed */}
+              {data.claimedAt && (
+                <>
+                  {liberarError && (
+                    <div className="text-red-400 text-sm p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      {liberarError}
+                    </div>
+                  )}
+                  {confirmLiberar ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-red-400">Liberar esta transferencia? Podra ser reclamada nuevamente.</span>
+                      <button
+                        onClick={handleLiberar}
+                        disabled={liberando}
+                        className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm cursor-pointer disabled:opacity-40"
+                      >
+                        {liberando ? 'Liberando...' : 'Confirmar'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmLiberar(false)}
+                        className="px-3 py-1.5 bg-white/5 text-secondary rounded-lg hover:bg-white/10 transition-colors text-sm cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmLiberar(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer text-sm w-full justify-center"
+                    >
+                      <Unlock size={14} />
+                      Liberar Transferencia
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}

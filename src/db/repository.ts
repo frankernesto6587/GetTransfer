@@ -310,6 +310,18 @@ export async function confirmarTransferencia(id: number) {
   });
 }
 
+export async function desmacharTransferencia(id: number) {
+  return prisma.transferencia.update({
+    where: { id },
+    data: {
+      codigoConfirmacion: null,
+      confirmedAt: null,
+      claimedAt: null,
+      claimedBy: null,
+    },
+  });
+}
+
 export async function buscarPorCodigo(codigo: string) {
   return prisma.transferencia.findUnique({
     where: { codigoConfirmacion: codigo },
