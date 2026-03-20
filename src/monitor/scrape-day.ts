@@ -81,7 +81,7 @@ function readBankStatus(page: Page): Promise<BankCheckResult> {
   })();
 }
 
-async function fillAndSubmitForm(page: Page, dateStr: string): Promise<void> {
+async function fillAndSubmitForm(page: Page, dateStr: string, checkboxId: '#creditos' | '#debitos' = '#creditos'): Promise<void> {
   await page.evaluate((account) => {
     const combo = (window as any).jQuery('#cuenta').data('kendoComboBox');
     if (combo) {
@@ -101,7 +101,9 @@ async function fillAndSubmitForm(page: Page, dateStr: string): Promise<void> {
   }, dateStr);
   await page.waitForTimeout(300);
 
-  await page.check('#creditos');
+  const otherCheckbox = checkboxId === '#creditos' ? '#debitos' : '#creditos';
+  await page.uncheck(otherCheckbox).catch(() => {});
+  await page.check(checkboxId);
   await page.click('button:has-text("Aceptar"), input[type="submit"]', { timeout: 60000 });
   await page.waitForTimeout(3000);
   await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
@@ -140,6 +142,12 @@ export async function navigateToOperaciones(page: Page): Promise<boolean> {
   return !!submitExists;
 }
 
+async function scrapeDayOnePass(page: Page, dateStr: string, checkboxId: '#creditos' | '#debitos'): Promise<TransferenciaEntrada[]> {
+  await fillAndSubmitForm(page, dateStr, checkboxId);
+  const rows = await extractRows(page);
+  return parseRows(rows);
+}
+
 export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEntrada[]> {
   const dateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 
@@ -150,9 +158,9 @@ export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEn
       if (!ok) return [];
     }
 
-    await fillAndSubmitForm(page, dateStr);
-    const rows = await extractRows(page);
-    return parseRows(rows);
+    const creditos = await scrapeDayOnePass(page, dateStr, '#creditos');
+    const debitos = await scrapeDayOnePass(page, dateStr, '#debitos');
+    return [...creditos, ...debitos];
   } catch (err: any) {
     console.error(`scrapeDay error (${dateStr}): ${err.message?.substring(0, 80)}`);
     return [];
@@ -172,7 +180,7 @@ export async function scrapeMonth(page: Page, month: number, year: number): Prom
   for (let d = 1; d <= lastDay; d++) {
     const date = new Date(year, month - 1, d);
     const transfers = await scrapeDay(page, date);
-    console.log(`  ${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} -> ${transfers.length} creditos`);
+    console.log(`  ${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} -> ${transfers.length} operaciones`);
     allTransfers.push(...transfers);
   }
 

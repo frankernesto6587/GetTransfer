@@ -52,9 +52,7 @@ async function loginBandec(page: Page) {
   return ok;
 }
 
-async function fillAndSubmitForm(page: Page, dateStr: string): Promise<void> {
-  // Llenar cuenta
-  // Cuenta - Kendo ComboBox: seleccionar via JS del widget
+async function fillAndSubmitForm(page: Page, dateStr: string, checkboxId: '#creditos' | '#debitos' = '#creditos'): Promise<void> {
   await page.evaluate((account) => {
     const combo = (window as any).jQuery('#cuenta').data('kendoComboBox');
     if (combo) {
@@ -64,7 +62,6 @@ async function fillAndSubmitForm(page: Page, dateStr: string): Promise<void> {
   }, ACCOUNT);
   await page.waitForTimeout(300);
 
-  // Fecha - Kendo DatePicker: setear via JS del widget
   await page.evaluate((dateVal) => {
     const picker = (window as any).jQuery('#start').data('kendoDatePicker');
     if (picker) {
@@ -75,10 +72,10 @@ async function fillAndSubmitForm(page: Page, dateStr: string): Promise<void> {
   }, dateStr);
   await page.waitForTimeout(300);
 
-  // Créditos
-  await page.check('#creditos');
+  const otherCheckbox = checkboxId === '#creditos' ? '#debitos' : '#creditos';
+  await page.uncheck(otherCheckbox).catch(() => {});
+  await page.check(checkboxId);
 
-  // Submit
   await page.click('button:has-text("Aceptar"), input[type="submit"]', { timeout: 10000 });
   await page.waitForTimeout(2500);
   await page.waitForLoadState('networkidle').catch(() => {});
@@ -166,28 +163,34 @@ async function main() {
 
     const allTransfers: TransferenciaEntrada[] = [];
 
+    async function scrapeDayTwoPasses(dateStr: string, d: number): Promise<TransferenciaEntrada[]> {
+      const results: TransferenciaEntrada[] = [];
+      for (const checkboxId of ['#creditos', '#debitos'] as const) {
+        await fillAndSubmitForm(page, dateStr, checkboxId);
+        const rows = await extractRows(page);
+        results.push(...parseRows(rows));
+      }
+      return results;
+    }
+
     // Primera consulta
     const firstDate = `01/${String(month).padStart(2, '0')}/${year}`;
     process.stdout.write(`  ${firstDate} -> `);
     try {
-      await fillAndSubmitForm(page, firstDate);
-      const rows = await extractRows(page);
-      const transfers = parseRows(rows);
-      console.log(`${transfers.length} creditos`);
+      const transfers = await scrapeDayTwoPasses(firstDate, 1);
+      console.log(`${transfers.length} operaciones`);
       allTransfers.push(...transfers);
     } catch (err: any) {
       console.log(`ERROR: ${err.message?.substring(0, 80)}`);
       await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'debug-day1-error.png'), fullPage: true });
     }
 
-    // Días siguientes - la página de resultados tiene el formulario arriba
-    // Solo necesito cambiar la fecha y re-enviar
+    // Días siguientes
     for (let d = 2; d <= day; d++) {
       const dateStr = `${String(d).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
       process.stdout.write(`  ${dateStr} -> `);
 
       try {
-        // Verificar si el formulario sigue en la página
         const formSubmit = await page.$('button[type="submit"]');
         if (!formSubmit) {
           await page.click('a:has-text("Operaciones Diarias")');
@@ -195,20 +198,16 @@ async function main() {
           await page.waitForLoadState('networkidle').catch(() => {});
         }
 
-        await fillAndSubmitForm(page, dateStr);
-        const rows = await extractRows(page);
-        const transfers = parseRows(rows);
-        console.log(`${transfers.length} creditos`);
+        const transfers = await scrapeDayTwoPasses(dateStr, d);
+        console.log(`${transfers.length} operaciones`);
         allTransfers.push(...transfers);
       } catch (err: any) {
         console.log(`ERROR: ${err.message?.substring(0, 80)}`);
-        // Tomar screenshot de debug
         await page.screenshot({
           path: path.join(SCREENSHOTS_DIR, `debug-day${d}-error.png`),
           fullPage: true
         }).catch(() => {});
 
-        // Intentar recuperar
         const currentUrl = page.url();
         console.log(`  (URL: ${currentUrl})`);
 
