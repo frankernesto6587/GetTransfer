@@ -69,7 +69,6 @@ jobs:
             ${{ github.workspace }}/ ${{ env.DEPLOY_PATH }}/
 
       - name: Install dependencies
-        if: steps.changes.outputs.deps == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
