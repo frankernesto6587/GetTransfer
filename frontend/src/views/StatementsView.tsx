@@ -1,55 +1,79 @@
 import { useState, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Upload, FileArchive, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Upload, FileArchive, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { uploadStatement, statementUploadsQuery } from '../lib/api'
 import { displayFecha, formatCurrency } from '../components/TransferShared'
 import type { StatementUploadResult, StatementValidationError } from '../types'
+
+interface FileResult {
+  filename: string
+  status: 'pending' | 'uploading' | 'success' | 'error'
+  result?: StatementUploadResult
+  errors?: StatementValidationError[]
+}
 
 export function StatementsView() {
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [result, setResult] = useState<StatementUploadResult | null>(null)
-  const [errors, setErrors] = useState<StatementValidationError[]>([])
+  const [fileResults, setFileResults] = useState<FileResult[]>([])
+  const [uploading, setUploading] = useState(false)
   const [page, setPage] = useState(1)
 
   const uploadsQuery = useQuery(statementUploadsQuery(page))
 
-  const uploadMut = useMutation({
-    mutationFn: uploadStatement,
-    onSuccess: (data) => {
-      setResult(data)
-      setErrors([])
-      queryClient.invalidateQueries({ queryKey: ['statement-uploads'] })
-      queryClient.invalidateQueries({ queryKey: ['transferencias'] })
-      queryClient.invalidateQueries({ queryKey: ['resumen'] })
-    },
-    onError: (err: any) => {
-      setResult(null)
-      if (err?.details) {
-        setErrors(err.details)
-      } else {
-        setErrors([{ file: '', type: 'error', message: err?.error || err?.message || 'Error al subir archivo' }])
-      }
-    },
-  })
-
-  const handleFile = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-      setErrors([{ file: file.name, type: 'error', message: 'El archivo debe ser un .zip' }])
+  const handleFiles = async (files: File[]) => {
+    const zips = files.filter(f => f.name.toLowerCase().endsWith('.zip'))
+    if (zips.length === 0) {
+      setFileResults([{ filename: files[0]?.name || '?', status: 'error', errors: [{ file: '', type: 'error', message: 'Selecciona archivos .zip' }] }])
       return
     }
-    setResult(null)
-    setErrors([])
-    uploadMut.mutate(file)
+
+    // Sort by filename for chronological order
+    zips.sort((a, b) => a.name.localeCompare(b.name))
+
+    const results: FileResult[] = zips.map(f => ({ filename: f.name, status: 'pending' as const }))
+    setFileResults(results)
+    setUploading(true)
+
+    for (let i = 0; i < zips.length; i++) {
+      const file = zips[i]!
+      const name = file.name
+      results[i] = { filename: name, status: 'uploading' }
+      setFileResults([...results])
+
+      try {
+        const data = await uploadStatement(file)
+        results[i] = { filename: name, status: 'success', result: data }
+      } catch (err: any) {
+        const errs = err?.details
+          ? err.details
+          : [{ file: name, type: 'error', message: err?.error || err?.message || 'Error al subir archivo' }]
+        results[i] = { filename: name, status: 'error', errors: errs }
+      }
+      setFileResults([...results])
+    }
+
+    setUploading(false)
+    queryClient.invalidateQueries({ queryKey: ['statement-uploads'] })
+    queryClient.invalidateQueries({ queryKey: ['transferencias'] })
+    queryClient.invalidateQueries({ queryKey: ['resumen'] })
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) handleFiles(files)
   }
+
+  // Aggregate totals from successful uploads
+  const successResults = fileResults.filter(r => r.status === 'success' && r.result)
+  const totals = successResults.reduce((acc, r) => ({
+    filesProcessed: acc.filesProcessed + (r.result?.filesProcessed ?? 0),
+    totalRecords: acc.totalRecords + (r.result?.totalRecords ?? 0),
+    nuevas: acc.nuevas + (r.result?.nuevas ?? 0),
+  }), { filesProcessed: 0, totalRecords: 0, nuevas: 0 })
 
   const uploads = uploadsQuery.data?.data ?? []
   const pagination = uploadsQuery.data?.pagination
@@ -58,37 +82,44 @@ export function StatementsView() {
     <div className="p-4 md:p-8 max-w-[900px] w-full">
       <div className="mb-8">
         <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Estados de Cuenta</h1>
-        <p className="text-secondary mt-1">Subir ZIP con archivos XML del banco</p>
+        <p className="text-secondary mt-1">Subir archivos ZIP con XML del banco (uno o varios)</p>
       </div>
 
       {/* Upload Zone */}
       <div className="rounded-xl border border-border bg-surface p-6 mb-6">
         <div className="flex items-center gap-3 mb-4">
           <Upload size={20} className="text-gold" />
-          <h2 className="font-headline text-lg font-semibold text-white">Subir Estado de Cuenta</h2>
+          <h2 className="font-headline text-lg font-semibold text-white">Subir Estados de Cuenta</h2>
         </div>
 
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
-          onClick={() => fileRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+          onClick={() => !uploading && fileRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+            uploading ? 'cursor-wait' : 'cursor-pointer'
+          } ${
             dragOver
               ? 'border-gold bg-gold/5'
               : 'border-border hover:border-gold/40 hover:bg-white/[0.02]'
           }`}
         >
           <FileArchive size={40} className={`mx-auto mb-3 ${dragOver ? 'text-gold' : 'text-tertiary'}`} />
-          {uploadMut.isPending ? (
-            <p className="text-gold text-sm animate-pulse">Procesando archivo...</p>
+          {uploading ? (
+            <div className="flex items-center justify-center gap-2">
+              <Loader2 size={16} className="text-gold animate-spin" />
+              <p className="text-gold text-sm">
+                Procesando {fileResults.filter(r => r.status === 'success').length + 1} de {fileResults.length}...
+              </p>
+            </div>
           ) : (
             <>
               <p className="text-secondary text-sm">
-                Arrastra un archivo .zip aqui o haz clic para seleccionar
+                Arrastra archivos .zip aqui o haz clic para seleccionar
               </p>
               <p className="text-tertiary text-xs mt-1">
-                ZIP con archivos XML de estado de cuenta BANDEC
+                Puedes seleccionar varios ZIPs a la vez (cada uno con 1 XML)
               </p>
             </>
           )}
@@ -98,57 +129,81 @@ export function StatementsView() {
           ref={fileRef}
           type="file"
           accept=".zip,.ZIP"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleFile(file)
+            const files = Array.from(e.target.files ?? [])
+            if (files.length > 0) handleFiles(files)
             e.target.value = ''
           }}
         />
 
-        {/* Success result */}
-        {result && (
-          <div className="mt-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle size={18} className="text-emerald-400" />
-              <span className="text-emerald-400 font-medium text-sm">Archivo procesado correctamente</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div>
-                <span className="text-tertiary text-xs uppercase">Archivos XML</span>
-                <p className="text-white font-mono">{result.filesProcessed}</p>
-              </div>
-              <div>
-                <span className="text-tertiary text-xs uppercase">Operaciones</span>
-                <p className="text-white font-mono">{result.totalRecords}</p>
-              </div>
-              <div>
-                <span className="text-tertiary text-xs uppercase">Nuevas</span>
-                <p className="text-emerald-400 font-mono font-medium">{result.nuevas}</p>
-              </div>
-              <div>
-                <span className="text-tertiary text-xs uppercase">Duplicadas</span>
-                <p className="text-secondary font-mono">{result.totalRecords - result.nuevas}</p>
-              </div>
-            </div>
-            <div className="mt-2 text-xs text-secondary">
-              Periodo: {displayFecha(result.fechaDesde)} — {displayFecha(result.fechaHasta)}
-            </div>
-          </div>
-        )}
-
-        {/* Validation errors */}
-        {errors.length > 0 && (
+        {/* Per-file results */}
+        {fileResults.length > 0 && (
           <div className="mt-4 space-y-2">
-            {errors.map((err, i) => (
-              <div key={i} className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                <div className="flex items-start gap-2">
-                  <AlertCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+            {/* Aggregate summary if multiple successes */}
+            {successResults.length > 1 && (
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle size={16} className="text-emerald-400" />
+                  <span className="text-emerald-400 font-medium text-sm">
+                    {successResults.length} de {fileResults.length} archivos procesados
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-sm">
                   <div>
-                    <p className="text-red-400 text-sm">{err.message}</p>
-                    {err.file && <p className="text-red-400/60 text-xs mt-0.5">{err.file}</p>}
+                    <span className="text-tertiary text-xs uppercase">Operaciones</span>
+                    <p className="text-white font-mono">{totals.totalRecords}</p>
+                  </div>
+                  <div>
+                    <span className="text-tertiary text-xs uppercase">Nuevas</span>
+                    <p className="text-emerald-400 font-mono font-medium">{totals.nuevas}</p>
+                  </div>
+                  <div>
+                    <span className="text-tertiary text-xs uppercase">Duplicadas</span>
+                    <p className="text-secondary font-mono">{totals.totalRecords - totals.nuevas}</p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {fileResults.map((fr, i) => (
+              <div key={i} className={`p-3 rounded-lg border ${
+                fr.status === 'success'
+                  ? 'bg-emerald-500/5 border-emerald-500/15'
+                  : fr.status === 'error'
+                  ? 'bg-red-500/10 border-red-500/20'
+                  : fr.status === 'uploading'
+                  ? 'bg-gold/5 border-gold/20'
+                  : 'bg-white/[0.02] border-border'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {fr.status === 'uploading' && <Loader2 size={14} className="text-gold animate-spin shrink-0" />}
+                  {fr.status === 'success' && <CheckCircle size={14} className="text-emerald-400 shrink-0" />}
+                  {fr.status === 'error' && <AlertCircle size={14} className="text-red-400 shrink-0" />}
+                  {fr.status === 'pending' && <Clock size={14} className="text-tertiary shrink-0" />}
+                  <span className={`text-sm font-mono truncate ${
+                    fr.status === 'error' ? 'text-red-400' : fr.status === 'success' ? 'text-emerald-400' : 'text-secondary'
+                  }`}>
+                    {fr.filename}
+                  </span>
+
+                  {fr.result && (
+                    <span className="ml-auto text-xs text-secondary whitespace-nowrap">
+                      {fr.result.nuevas} nuevas / {fr.result.totalRecords} total
+                      {' — '}
+                      {displayFecha(fr.result.fechaDesde)} a {displayFecha(fr.result.fechaHasta)}
+                    </span>
+                  )}
+                </div>
+
+                {fr.errors && fr.errors.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {fr.errors.map((err, j) => (
+                      <p key={j} className="text-red-400 text-xs">{err.message}</p>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
