@@ -10,6 +10,7 @@ import {
   Link as LinkIcon,
   Database,
   Clock,
+  FileUp,
 } from 'lucide-react'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { icon: Clock, label: 'Odoo Legacy', to: '/confirmar-odoo-legacy', requireConfirm: true },
   { icon: Database, label: 'Transferencias Odoo', to: '/transferencias-odoo', requireConfirm: true },
   { icon: BarChart3, label: 'Reportes', to: '/reportes' },
+  { icon: FileUp, label: 'Estados de Cuenta', to: '/estados-cuenta', requireAdmin: true },
   { icon: Settings, label: 'Configuracion', to: '/configuracion', requireAdmin: true },
   { icon: Users, label: 'Usuarios', to: '/usuarios', requireAdmin: true },
   { icon: HelpCircle, label: 'Ayuda', to: '/ayuda' },

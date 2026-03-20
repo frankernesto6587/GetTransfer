@@ -213,3 +213,41 @@ export interface AutoConfirmarResult {
 export type TransferDetailData =
   | { source: 'bandec'; data: Transferencia }
   | { source: 'odoo'; data: TransferenciaOdooItem }
+
+// ── Statement Upload types ──
+
+export interface StatementUpload {
+  id: number
+  filename: string
+  fileHash: string
+  filesProcessed: number
+  totalRecords: number
+  nuevas: number
+  fechaDesde: string
+  fechaHasta: string
+  saldoInicial: number | null
+  saldoFinal: number | null
+  createdAt: string
+  user: { name: string; email: string }
+}
+
+export interface StatementUploadResult {
+  uploadId: number
+  filesProcessed: number
+  totalRecords: number
+  nuevas: number
+  fechaDesde: string
+  fechaHasta: string
+}
+
+export interface StatementValidationError {
+  file: string
+  type: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface StatementUploadsResponse {
+  data: StatementUpload[]
+  pagination: PaginationInfo
+}

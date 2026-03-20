@@ -14,6 +14,7 @@ import { ReportesView } from './views/ReportesView'
 import { ConfigView } from './views/ConfigView'
 import { UsuariosView } from './views/UsuariosView'
 import { AyudaView } from './views/AyudaView'
+import { StatementsView } from './views/StatementsView'
 
 // ── Root route ──
 const rootRoute = createRootRoute({
@@ -104,6 +105,12 @@ const usuariosRoute = createRoute({
   component: UsuariosView,
 })
 
+const statementsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/estados-cuenta',
+  component: StatementsView,
+})
+
 const ayudaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ayuda',
@@ -119,6 +126,7 @@ const routeTree = rootRoute.addChildren([
   confirmarOdooLegacyRoute,
   transferenciasOdooRoute,
   reportesRoute,
+  statementsRoute,
   configRoute,
   usuariosRoute,
   ayudaRoute,

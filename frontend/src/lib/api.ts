@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -512,3 +512,30 @@ export async function deleteInvitation(id: number): Promise<void> {
   const res = await apiFetch(`/api/invitations/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
+
+// ── Statement Upload API ──
+
+export async function uploadStatement(file: File): Promise<StatementUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await apiFetch('/api/statements/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw body
+  }
+  return res.json()
+}
+
+export async function getStatementUploads(page = 1, limit = 20): Promise<StatementUploadsResponse> {
+  const res = await apiFetch(`/api/statements/uploads?page=${page}&limit=${limit}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export const statementUploadsQuery = (page = 1) => ({
+  queryKey: ['statement-uploads', page] as const,
+  queryFn: () => getStatementUploads(page),
+})
