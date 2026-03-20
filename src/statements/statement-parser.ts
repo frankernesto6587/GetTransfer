@@ -32,6 +32,7 @@ export function parseXMLFile(filename: string, xmlContent: string): ParsedStatem
   const parser = new XMLParser({
     ignoreAttributes: false,
     trimValues: true,
+    processEntities: false,
   });
 
   const parsed = parser.parse(xmlContent);
