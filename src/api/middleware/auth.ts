@@ -26,7 +26,7 @@ export async function bearerAuth(request: FastifyRequest, reply: FastifyReply) {
 
 // ── JWT cookie auth (global hook) ──
 
-const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/docs'];
+const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/docs', '/api/confirmar-odoo/reset-confirmaciones'];
 // Telegram incoming webhook: token is a long bot token like "123456:ABC-DEF", never "register"/"unregister"/"info"
 const WEBHOOK_ADMIN_PATHS = new Set(['register', 'unregister', 'info']);
 
