@@ -7,6 +7,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -18,6 +19,7 @@ import { transferenciasOdooRoutes } from './routes/transferencias-odoo';
 import { reclamarRoutes } from './routes/reclamar';
 import { tokenRoutes } from './routes/token';
 import { monitorRoutes } from './routes/monitor';
+import { statementRoutes } from './routes/statements';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
 import { jwtAuth } from './middleware/auth';
@@ -60,6 +62,7 @@ async function main() {
     },
   });
   await app.register(swaggerUi, { routePrefix: '/docs' });
+  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
 
   // Reset confirmaciones (temporal, sin auth - eliminar después de usar)
   app.post('/api/confirmar-odoo/reset-confirmaciones', async () => {
@@ -82,6 +85,7 @@ async function main() {
   await app.register(reclamarRoutes);
   await app.register(tokenRoutes);
   await app.register(monitorRoutes);
+  await app.register(statementRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
