@@ -175,6 +175,9 @@ export interface PendientesFilters {
   ci?: string;
   cuenta?: string;
   canal?: string;
+  fechaDesde?: string;  // YYYY-MM-DD
+  fechaHasta?: string;  // YYYY-MM-DD
+  estado?: 'pendiente' | 'revision' | 'todos';
 }
 
 export async function getPendientesPorFecha(limitOrFilters?: number | (PendientesFilters & { page?: number; limit?: number }), filters?: PendientesFilters) {
@@ -193,11 +196,23 @@ export async function getPendientesPorFecha(limitOrFilters?: number | (Pendiente
     filterParams = rest;
   }
 
-  const where: Prisma.TransferenciaWhereInput = { codigoConfirmacion: null };
+  const where: Prisma.TransferenciaWhereInput = {};
+  const estado = filterParams.estado || 'pendiente';
+  if (estado === 'pendiente') {
+    where.codigoConfirmacion = null;
+  } else if (estado === 'revision') {
+    where.matchType = 'REVIEW_REQUIRED';
+  }
+  // 'todos' = no filter on confirmation status
   if (filterParams.nombre) where.nombreOrdenante = { contains: filterParams.nombre, mode: 'insensitive' };
   if (filterParams.ci) where.ciOrdenante = { contains: filterParams.ci, mode: 'insensitive' };
   if (filterParams.cuenta) where.cuentaOrdenante = { contains: filterParams.cuenta, mode: 'insensitive' };
   if (filterParams.canal) where.canalEmision = { contains: filterParams.canal, mode: 'insensitive' };
+  if (filterParams.fechaDesde || filterParams.fechaHasta) {
+    where.fecha = {};
+    if (filterParams.fechaDesde) (where.fecha as Record<string, Date>).gte = new Date(filterParams.fechaDesde + 'T00:00:00Z');
+    if (filterParams.fechaHasta) (where.fecha as Record<string, Date>).lte = new Date(filterParams.fechaHasta + 'T23:59:59Z');
+  }
 
   const [data, total, aggregates] = await Promise.all([
     prisma.transferencia.findMany({
@@ -296,18 +311,46 @@ export async function buscarPendientes(params: BuscarPendientesParams) {
   });
 }
 
-export async function confirmarTransferencia(id: number) {
+export async function confirmarTransferencia(
+  id: number,
+  opts?: { matchType?: string; nivelConfianza?: number; prefix?: string }
+) {
   const transfer = await prisma.transferencia.findUnique({ where: { id } });
   if (!transfer) throw new Error('Transferencia no encontrada');
   if (transfer.codigoConfirmacion) throw new Error('Transferencia ya confirmada');
 
-  const codigo = `GT-${generateCode()}`;
+  const prefix = opts?.prefix || 'GT';
+  const codigo = `${prefix}-${generateCode()}`;
 
   return prisma.transferencia.update({
     where: { id },
     data: {
       codigoConfirmacion: codigo,
       confirmedAt: new Date(),
+      matchType: opts?.matchType || null,
+      nivelConfianza: opts?.nivelConfianza ?? null,
+    },
+  });
+}
+
+export async function specialAction(
+  id: number,
+  action: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED'
+) {
+  const transfer = await prisma.transferencia.findUnique({ where: { id } });
+  if (!transfer) throw new Error('Transferencia no encontrada');
+  if (transfer.codigoConfirmacion) throw new Error('Transferencia ya tiene código asignado');
+
+  const prefixMap = { CONFIRMED_DEPOSIT: 'DEP', CONFIRMED_BUY: 'BUY', REVIEW_REQUIRED: 'REV' };
+  const codigo = `${prefixMap[action]}-${generateCode()}`;
+  const isReview = action === 'REVIEW_REQUIRED';
+
+  return prisma.transferencia.update({
+    where: { id },
+    data: {
+      codigoConfirmacion: codigo,
+      confirmedAt: isReview ? null : new Date(),
+      matchType: action,
     },
   });
 }
@@ -320,6 +363,8 @@ export async function desmacharTransferencia(id: number) {
       confirmedAt: null,
       claimedAt: null,
       claimedBy: null,
+      matchType: null,
+      nivelConfianza: null,
     },
   });
 }
@@ -333,6 +378,8 @@ export async function resetAllConfirmaciones() {
       claimedAt: null,
       claimedBy: null,
       searchAttempts: 0,
+      matchType: null,
+      nivelConfianza: null,
     },
   });
   return result.count;

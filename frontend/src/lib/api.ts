@@ -151,12 +151,15 @@ export interface PendientesResponse {
   totals: TotalsInfo
 }
 
-export async function getPendientesOdoo(filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; page?: number; limit?: number }): Promise<PendientesResponse> {
+export async function getPendientesOdoo(filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string; estado?: string; page?: number; limit?: number }): Promise<PendientesResponse> {
   const params = new URLSearchParams()
   if (filters?.nombre) params.set('nombre', filters.nombre)
   if (filters?.ci) params.set('ci', filters.ci)
   if (filters?.cuenta) params.set('cuenta', filters.cuenta)
   if (filters?.canal) params.set('canal', filters.canal)
+  if (filters?.fechaDesde) params.set('fechaDesde', filters.fechaDesde)
+  if (filters?.fechaHasta) params.set('fechaHasta', filters.fechaHasta)
+  if (filters?.estado) params.set('estado', filters.estado)
   if (filters?.page) params.set('page', String(filters.page))
   if (filters?.limit) params.set('limit', String(filters.limit))
   const qs = params.toString()
@@ -177,11 +180,35 @@ export async function buscarOdooMatch(transferId: number): Promise<{ transfer: T
   return res.json()
 }
 
-export async function confirmarOdoo(transferId: number, paymentId: number): Promise<{ confirmed: Transferencia; odoo: { success: boolean; order_name?: string; message?: string } }> {
+export async function confirmarOdoo(
+  transferId: number,
+  paymentId: number,
+  opts?: { nivelConfianza?: number; matchAuto?: boolean }
+): Promise<{ confirmed: Transferencia; odoo: { success: boolean; order_name?: string; message?: string } }> {
   const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/confirmar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ payment_id: paymentId }),
+    body: JSON.stringify({
+      payment_id: paymentId,
+      nivel_confianza: opts?.nivelConfianza,
+      match_auto: opts?.matchAuto,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function accionEspecial(
+  transferId: number,
+  accion: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED'
+): Promise<Transferencia> {
+  const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/accion-especial`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accion }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -199,11 +226,11 @@ export async function desmacharTransferencia(transferId: number): Promise<Transf
   return res.json()
 }
 
-export async function autoConfirmarOdoo(cantidad: number = 20): Promise<AutoConfirmarResult> {
+export async function autoConfirmarOdoo(filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string }): Promise<AutoConfirmarResult> {
   const res = await apiFetch('/api/confirmar-odoo/auto', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cantidad }),
+    body: JSON.stringify(filters || {}),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -307,6 +334,7 @@ export const transferenciasOdooQuery = (params: TransferenciasOdooParams) => {
 // ── Update Odoo Payment ──
 
 export async function updateOdooPayment(paymentId: number, fields: {
+  card_holder_name?: string
   card_holder_ci?: string
   card_number?: string
   transfer_code?: string

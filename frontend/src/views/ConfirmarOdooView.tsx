@@ -13,13 +13,21 @@ import {
   User,
   Hash,
   Wallet,
+  Calendar,
+  MoreVertical,
+  Landmark,
+  ShoppingCart,
+  AlertTriangle,
+  Undo2,
 } from 'lucide-react'
-import { FilterBar, FilterInput, FilterSelect } from '../components/filters'
+import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import {
   getPendientesOdoo,
   buscarOdooMatch,
   confirmarOdoo,
   autoConfirmarOdoo,
+  accionEspecial,
+  desmacharTransferencia,
 } from '../lib/api'
 import type { Transferencia, OdooMatchResponse, OdooPaymentMatch, AutoConfirmarResult } from '../types'
 
@@ -39,6 +47,15 @@ const nivelLabels: Record<number, string> = {
   6: 'Nombre + Monto + Fecha',
 }
 
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function firstOfMonth() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 export function ConfirmarOdooView() {
   const [pendientes, setPendientes] = useState<Transferencia[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -52,17 +69,23 @@ export function ConfirmarOdooView() {
 
   // Auto result
   const [autoResult, setAutoResult] = useState<AutoConfirmarResult | null>(null)
-  const [autoCantidad, setAutoCantidad] = useState(20)
+
+  // Action menu
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
 
   // Filters
+  const [filterEstado, setFilterEstado] = useState<'pendiente' | 'revision' | 'todos'>('pendiente')
   const [filterNombre, setFilterNombre] = useState('')
   const [filterCi, setFilterCi] = useState('')
   const [filterCuenta, setFilterCuenta] = useState('')
   const [filterCanal, setFilterCanal] = useState('')
+  const [fechaDesde, setFechaDesde] = useState(firstOfMonth())
+  const [fechaHasta, setFechaHasta] = useState(today())
+  const [activePreset, setActivePreset] = useState<DatePresetKey | ''>('month')
 
   const transfer = pendientes[currentIndex] ?? null
 
-  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string }) => {
+  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string; estado?: string }) => {
     setLoading(true)
     setError('')
     setOdooResult(null)
@@ -84,25 +107,58 @@ export function ConfirmarOdooView() {
   }, [])
 
   const currentFilters = useCallback(() => {
-    const f: { nombre?: string; ci?: string; cuenta?: string; canal?: string } = {}
+    const f: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string; estado?: string } = {}
     if (filterNombre) f.nombre = filterNombre
     if (filterCi) f.ci = filterCi
     if (filterCuenta) f.cuenta = filterCuenta
     if (filterCanal) f.canal = filterCanal
+    if (fechaDesde) f.fechaDesde = fechaDesde
+    if (fechaHasta) f.fechaHasta = fechaHasta
+    if (filterEstado !== 'pendiente') f.estado = filterEstado
     return Object.keys(f).length > 0 ? f : undefined
-  }, [filterNombre, filterCi, filterCuenta, filterCanal])
+  }, [filterNombre, filterCi, filterCuenta, filterCanal, fechaDesde, fechaHasta, filterEstado])
 
-  const debouncedReload = useDebouncedCallback((filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string }) => {
+  const debouncedReload = useDebouncedCallback((filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string; estado?: string }) => {
     loadPendientes(filters)
   }, 300)
 
   const clearFilters = useCallback(() => {
+    setFilterEstado('pendiente')
     setFilterNombre('')
     setFilterCi('')
     setFilterCuenta('')
     setFilterCanal('')
-    loadPendientes()
+    setFechaDesde(firstOfMonth())
+    setFechaHasta(today())
+    setActivePreset('month')
+    loadPendientes({ fechaDesde: firstOfMonth(), fechaHasta: today() })
   }, [loadPendientes])
+
+  const applyPreset = useCallback((preset: DatePresetKey) => {
+    setActivePreset(preset)
+    const t = new Date()
+    let fd = '', fh = ''
+    switch (preset) {
+      case 'today':
+        fd = today(); fh = today()
+        break
+      case 'week': {
+        const weekAgo = new Date(t)
+        weekAgo.setDate(weekAgo.getDate() - 6)
+        fd = weekAgo.toISOString().slice(0, 10); fh = today()
+        break
+      }
+      case 'month':
+        fd = firstOfMonth(); fh = today()
+        break
+      case 'all':
+        fd = ''; fh = ''
+        break
+    }
+    setFechaDesde(fd)
+    setFechaHasta(fh)
+    loadPendientes({ ...currentFilters(), fechaDesde: fd || undefined, fechaHasta: fh || undefined })
+  }, [loadPendientes, currentFilters])
 
   // Auto-search when transfer changes
   const searchOdoo = useCallback(async (transferId: number) => {
@@ -120,7 +176,7 @@ export function ConfirmarOdooView() {
   }, [])
 
   useEffect(() => {
-    loadPendientes()
+    loadPendientes({ fechaDesde: firstOfMonth(), fechaHasta: today() })
   }, [loadPendientes])
 
   useEffect(() => {
@@ -130,8 +186,8 @@ export function ConfirmarOdooView() {
   }, [transfer, confirmado, searchOdoo])
 
   const confirmarMut = useMutation({
-    mutationFn: async ({ transferId, paymentId }: { transferId: number; paymentId: number }) => {
-      return confirmarOdoo(transferId, paymentId)
+    mutationFn: async ({ transferId, paymentId, nivelConfianza, matchAuto }: { transferId: number; paymentId: number; nivelConfianza?: number; matchAuto?: boolean }) => {
+      return confirmarOdoo(transferId, paymentId, { nivelConfianza, matchAuto })
     },
     onSuccess: (data) => {
       setConfirmado({
@@ -141,16 +197,44 @@ export function ConfirmarOdooView() {
     },
   })
 
+  const accionMut = useMutation({
+    mutationFn: async ({ transferId, accion }: { transferId: number; accion: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED' }) => {
+      return accionEspecial(transferId, accion)
+    },
+    onSuccess: (data) => {
+      setConfirmado({
+        gt_codigo: data.codigoConfirmacion || '?',
+      })
+      setActionMenuOpen(false)
+    },
+  })
+
+  const revertMut = useMutation({
+    mutationFn: async (transferId: number) => {
+      return desmacharTransferencia(transferId)
+    },
+    onSuccess: () => {
+      // Remove from list and move to next
+      const newList = pendientes.filter((_, i) => i !== currentIndex)
+      setPendientes(newList)
+      const nextIndex = Math.min(currentIndex, newList.length - 1)
+      setCurrentIndex(-1)
+      setOdooResult(null)
+      setTimeout(() => setCurrentIndex(Math.max(0, nextIndex)), 0)
+      if (newList.length === 0) setError('No hay transferencias en revisión')
+    },
+  })
+
   const autoMut = useMutation({
-    mutationFn: (cantidad: number) => autoConfirmarOdoo(cantidad),
+    mutationFn: () => autoConfirmarOdoo(currentFilters()),
     onSuccess: (data) => {
       setAutoResult(data)
     },
   })
 
-  const handleConfirmar = (paymentId: number) => {
+  const handleConfirmar = (paymentId: number, nivelConfianza?: number, matchAuto?: boolean) => {
     if (!transfer) return
-    confirmarMut.mutate({ transferId: transfer.id, paymentId })
+    confirmarMut.mutate({ transferId: transfer.id, paymentId, nivelConfianza, matchAuto })
   }
 
   const navigateTo = (index: number) => {
@@ -203,24 +287,14 @@ export function ConfirmarOdooView() {
           <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Confirmar en Odoo</h1>
           <p className="text-secondary mt-1">Vincular transferencias GT con pagos POS en Odoo</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={autoCantidad}
-            onChange={(e) => setAutoCantidad(Math.max(1, Math.min(100, parseInt(e.target.value) || 20)))}
-            className="w-16 bg-page border border-border rounded-lg px-2 py-2 text-sm text-white text-center focus:outline-none focus:border-gold/50 transition-colors"
-          />
-          <button
-            onClick={() => autoMut.mutate(autoCantidad)}
-            disabled={autoMut.isPending}
-            className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/15 text-amber-400 rounded-lg hover:bg-amber-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
-          >
-            <Zap size={16} />
-            {autoMut.isPending ? 'Procesando...' : 'Auto'}
-          </button>
-        </div>
+        <button
+          onClick={() => autoMut.mutate()}
+          disabled={autoMut.isPending}
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-500/15 text-amber-400 rounded-lg hover:bg-amber-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium"
+        >
+          <Zap size={16} />
+          {autoMut.isPending ? 'Procesando...' : 'Auto'}
+        </button>
       </div>
 
       {/* Filter bar */}
@@ -229,8 +303,32 @@ export function ConfirmarOdooView() {
         onClear={clearFilters}
         resultCount={pendientes.length}
         resultLabel="pendientes"
+        dateRow={
+          <>
+            <Calendar size={16} className="text-tertiary shrink-0" />
+            <DatePresets active={activePreset} onSelect={applyPreset} />
+            <span className="text-border hidden md:inline">|</span>
+            <FilterDateRange
+              desde={fechaDesde}
+              hasta={fechaHasta}
+              onDesdeChange={(v) => { setFechaDesde(v); setActivePreset(''); loadPendientes({ ...currentFilters(), fechaDesde: v || undefined }) }}
+              onHastaChange={(v) => { setFechaHasta(v); setActivePreset(''); loadPendientes({ ...currentFilters(), fechaHasta: v || undefined }) }}
+            />
+          </>
+        }
         primaryFilters={
           <>
+            <FilterSelect
+              value={filterEstado}
+              onChange={(v) => { setFilterEstado(v as 'pendiente' | 'revision' | 'todos'); loadPendientes({ ...currentFilters(), estado: v || undefined }) }}
+              options={[
+                { value: 'pendiente', label: 'Pendientes' },
+                { value: 'revision', label: 'En revisión' },
+                { value: 'todos', label: 'Todos' },
+              ]}
+              allLabel=""
+              className="w-full md:w-36"
+            />
             <FilterInput
               icon={User}
               label="Nombre"
@@ -343,7 +441,66 @@ export function ConfirmarOdooView() {
         <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr] gap-6">
           {/* Left: GT Transfer data */}
           <div className="rounded-xl border border-border bg-surface p-6">
-            <h3 className="font-headline text-lg font-semibold text-white mb-4">Transferencia GT</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline text-lg font-semibold text-white">Transferencia GT</h3>
+              <div className="flex items-center gap-2">
+                {/* Revert button for review items */}
+                {filterEstado === 'revision' && transfer.codigoConfirmacion && (
+                  <button
+                    onClick={() => revertMut.mutate(transfer.id)}
+                    disabled={revertMut.isPending}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-amber-400 hover:bg-amber-500/15 rounded transition-colors cursor-pointer disabled:opacity-40"
+                    title="Revertir a pendiente"
+                  >
+                    <Undo2 size={14} />
+                    Revertir
+                  </button>
+                )}
+                {/* Action dropdown */}
+                {filterEstado !== 'revision' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setActionMenuOpen(!actionMenuOpen)}
+                      className="p-1.5 text-tertiary hover:text-white rounded transition-colors cursor-pointer"
+                      title="Acciones especiales"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    {actionMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setActionMenuOpen(false)} />
+                        <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-surface shadow-xl py-1">
+                          <button
+                            onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'CONFIRMED_DEPOSIT' })}
+                            disabled={accionMut.isPending}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            <Landmark size={14} className="text-blue-400" />
+                            Depósito
+                          </button>
+                          <button
+                            onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'CONFIRMED_BUY' })}
+                            disabled={accionMut.isPending}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            <ShoppingCart size={14} className="text-emerald-400" />
+                            Compra
+                          </button>
+                          <button
+                            onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'REVIEW_REQUIRED' })}
+                            disabled={accionMut.isPending}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            <AlertTriangle size={14} className="text-amber-400" />
+                            Requiere revisión
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
             {(() => {
               const bestMatch = odooResult?.resultado || odooResult?.candidatos?.[0] || null
               const m = bestMatch ? getMatchingFields(transfer, bestMatch) : null
@@ -479,7 +636,7 @@ export function ConfirmarOdooView() {
                 <PaymentCard
                   match={odooResult.resultado}
                   transfer={transfer}
-                  onConfirmar={() => handleConfirmar(odooResult.resultado!.payment_id)}
+                  onConfirmar={() => handleConfirmar(odooResult.resultado!.payment_id, odooResult.nivel_confianza ?? undefined, true)}
                   confirming={confirmarMut.isPending}
                 />
               </div>
@@ -497,7 +654,7 @@ export function ConfirmarOdooView() {
                       key={c.payment_id}
                       match={c}
                       transfer={transfer}
-                      onConfirmar={() => handleConfirmar(c.payment_id)}
+                      onConfirmar={() => handleConfirmar(c.payment_id, c.nivel_confianza)}
                       confirming={confirmarMut.isPending}
                     />
                   ))}
@@ -513,11 +670,23 @@ export function ConfirmarOdooView() {
               </div>
             )}
 
-            {/* Mutation error */}
+            {/* Mutation errors */}
             {confirmarMut.isError && (
               <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
                 <AlertCircle size={14} />
                 {confirmarMut.error?.message || 'Error al confirmar'}
+              </div>
+            )}
+            {accionMut.isError && (
+              <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} />
+                {accionMut.error?.message || 'Error en acción especial'}
+              </div>
+            )}
+            {revertMut.isError && (
+              <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} />
+                {revertMut.error?.message || 'Error al revertir'}
               </div>
             )}
           </div>

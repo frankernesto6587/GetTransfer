@@ -50,14 +50,14 @@ export async function transferenciasOdooRoutes(app: FastifyInstance) {
     const { paymentId } = request.params as { paymentId: string };
     const body = request.body as Record<string, unknown>;
 
-    const allowed = ['card_holder_ci', 'card_number', 'transfer_code'];
+    const allowed = ['card_holder_name', 'card_holder_ci', 'card_number', 'transfer_code'];
     const fields: Record<string, unknown> = { payment_id: Number(paymentId) };
     for (const key of allowed) {
       if (body[key] !== undefined) fields[key] = body[key];
     }
 
     if (Object.keys(fields).length <= 1) {
-      return reply.status(400).send({ error: 'Debe enviar al menos un campo: card_holder_ci, card_number, transfer_code' });
+      return reply.status(400).send({ error: 'Debe enviar al menos un campo: card_holder_name, card_holder_ci, card_number, transfer_code' });
     }
 
     try {

@@ -35,11 +35,14 @@ model Transferencia {
   claimedBy           String?
 
   searchAttempts      Int      @default(0)
+  matchType           String?
+  nivelConfianza      Int?
 
   @@index([fecha])
   @@index([nombreOrdenante])
   @@index([importe])
   @@index([claimedAt])
+  @@index([matchType])
 }
 
 model ApiToken {

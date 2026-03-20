@@ -24,6 +24,8 @@ export interface Transferencia {
   claimedAt: string | null
   claimedBy: string | null
   searchAttempts: number
+  matchType: string | null
+  nivelConfianza: number | null
 }
 
 export interface ApiToken {

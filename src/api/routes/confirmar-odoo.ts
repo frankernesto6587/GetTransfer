@@ -7,6 +7,17 @@ const idSchema = z.object({
   id: z.coerce.number().int().min(1),
 });
 
+function nivelToManualMatchType(nivel?: number): string {
+  const map: Record<number, string> = {
+    1: 'CONFIRMED_MANUAL_REF_ACCOUNT_CI',
+    2: 'CONFIRMED_MANUAL_CI_ACCOUNT_DATE',
+    3: 'CONFIRMED_MANUAL_CI_AMOUNT',
+    4: 'CONFIRMED_MANUAL_ACCOUNT_AMOUNT',
+    5: 'CONFIRMED_MANUAL_NAME_DATE',
+  };
+  return nivel ? (map[nivel] || 'CONFIRMED_MANUAL_CI_AMOUNT') : 'CONFIRMED_MANUAL_CI_AMOUNT';
+}
+
 /** Format Date to YYYY-MM-DD string */
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -79,6 +90,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     const query = request.query as Record<string, string | undefined>;
     const page = query.page ? parseInt(query.page) : undefined;
     const limit = query.limit ? parseInt(query.limit) : undefined;
+    const estado = query.estado as 'pendiente' | 'revision' | 'todos' | undefined;
     const result = await repo.getPendientesPorFecha({
       page,
       limit,
@@ -86,6 +98,9 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
       ci: query.ci,
       cuenta: query.cuenta,
       canal: query.canal,
+      fechaDesde: query.fechaDesde,
+      fechaHasta: query.fechaHasta,
+      estado,
     });
     return result;
   });
@@ -132,6 +147,8 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
 
     const bodySchema = z.object({
       payment_id: z.number().int().min(1),
+      nivel_confianza: z.number().int().min(1).max(6).optional(),
+      match_auto: z.boolean().optional(),
     });
     const bodyParsed = bodySchema.safeParse(request.body);
     if (!bodyParsed.success) {
@@ -146,10 +163,16 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'Transferencia ya confirmada' });
     }
 
+    // Derive matchType
+    const matchType = bodyParsed.data.match_auto
+      ? 'CONFIRMED_AUTO'
+      : nivelToManualMatchType(bodyParsed.data.nivel_confianza);
+    const nivelConfianza = bodyParsed.data.nivel_confianza;
+
     // Step 1: Confirm in GT (generates GT code)
     let confirmed;
     try {
-      confirmed = await repo.confirmarTransferencia(parsed.data.id);
+      confirmed = await repo.confirmarTransferencia(parsed.data.id, { matchType, nivelConfianza });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
       return reply.status(409).send({ error: message });
@@ -200,17 +223,19 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'Transferencia no esta confirmada' });
     }
 
-    // Step 1: Clear Odoo gt_* fields first
-    try {
-      await odooFetch('/api/pos/gettransfer/desmachar', {
-        gt_codigo: transfer.codigoConfirmacion,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      return reply.status(502).send({ error: `Error desmachando en Odoo: ${message}` });
+    // Step 1: Clear Odoo gt_* fields only if it was a GT- code (written to Odoo)
+    if (transfer.codigoConfirmacion?.startsWith('GT-')) {
+      try {
+        await odooFetch('/api/pos/gettransfer/desmachar', {
+          gt_codigo: transfer.codigoConfirmacion,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Error desconocido';
+        return reply.status(502).send({ error: `Error desmachando en Odoo: ${message}` });
+      }
     }
 
-    // Step 2: Clear GT confirmation fields (only if Odoo succeeded)
+    // Step 2: Clear GT confirmation fields
     const updated = await repo.desmacharTransferencia(parsed.data.id);
     return updated;
   });
@@ -218,12 +243,23 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
   // Auto-process pending transfers
   app.post('/api/confirmar-odoo/auto', async (request, _reply) => {
     const bodySchema = z.object({
-      cantidad: z.number().int().min(1).max(100).optional(),
+      nombre: z.string().optional(),
+      ci: z.string().optional(),
+      cuenta: z.string().optional(),
+      canal: z.string().optional(),
+      fechaDesde: z.string().optional(),
+      fechaHasta: z.string().optional(),
     });
     const parsed = bodySchema.safeParse(request.body || {});
-    const cantidad = parsed.success && parsed.data.cantidad ? parsed.data.cantidad : 20;
 
-    const result = await repo.getPendientesPorFecha({ limit: cantidad });
+    const result = await repo.getPendientesPorFecha({
+      nombre: parsed.success ? parsed.data.nombre : undefined,
+      ci: parsed.success ? parsed.data.ci : undefined,
+      cuenta: parsed.success ? parsed.data.cuenta : undefined,
+      canal: parsed.success ? parsed.data.canal : undefined,
+      fechaDesde: parsed.success ? parsed.data.fechaDesde : undefined,
+      fechaHasta: parsed.success ? parsed.data.fechaHasta : undefined,
+    });
     const pendientes = result.data;
     const resultados = {
       total: pendientes.length,
@@ -259,7 +295,10 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
 
         if (busqueda.match_auto && busqueda.resultado) {
           // Auto-confirm: GT + Odoo
-          const confirmed = await repo.confirmarTransferencia(transfer.id);
+          const confirmed = await repo.confirmarTransferencia(transfer.id, {
+            matchType: 'CONFIRMED_AUTO',
+            nivelConfianza: busqueda.nivel_confianza ?? undefined,
+          });
           const odooResult = await odooFetch('/api/pos/gettransfer/confirmar', {
             payment_id: busqueda.resultado.payment_id,
             gt_codigo: confirmed.codigoConfirmacion,
@@ -322,5 +361,29 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     }
 
     return resultados;
+  });
+
+  // Special action: deposit, buy, or review
+  app.post('/api/confirmar-odoo/pendiente/:id/accion-especial', async (request, reply) => {
+    const parsed = idSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'ID invalido' });
+    }
+
+    const bodySchema = z.object({
+      accion: z.enum(['CONFIRMED_DEPOSIT', 'CONFIRMED_BUY', 'REVIEW_REQUIRED']),
+    });
+    const bodyParsed = bodySchema.safeParse(request.body);
+    if (!bodyParsed.success) {
+      return reply.status(400).send({ error: 'accion invalida (CONFIRMED_DEPOSIT | CONFIRMED_BUY | REVIEW_REQUIRED)' });
+    }
+
+    try {
+      const updated = await repo.specialAction(parsed.data.id, bodyParsed.data.accion);
+      return updated;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      return reply.status(409).send({ error: message });
+    }
   });
 }

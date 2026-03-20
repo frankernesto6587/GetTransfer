@@ -28,6 +28,33 @@ function displayDate(iso: string) {
 
 const col = createColumnHelper<Transferencia>()
 
+const MATCH_TYPE_CONFIG: Record<string, { label: string; class: string; codeClass: string }> = {
+  CONFIRMED_AUTO: { label: 'Auto', class: 'bg-emerald-500/15 text-emerald-400', codeClass: 'bg-emerald-500/15 text-emerald-400' },
+  CONFIRMED_MANUAL_REF_ACCOUNT_CI: { label: 'Manual L1', class: 'bg-blue-500/15 text-blue-400', codeClass: 'bg-blue-500/15 text-blue-400' },
+  CONFIRMED_MANUAL_CI_ACCOUNT_DATE: { label: 'Manual L2', class: 'bg-blue-500/15 text-blue-400', codeClass: 'bg-blue-500/15 text-blue-400' },
+  CONFIRMED_MANUAL_CI_AMOUNT: { label: 'Manual L3', class: 'bg-cyan-500/15 text-cyan-400', codeClass: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_MANUAL_ACCOUNT_AMOUNT: { label: 'Manual L4', class: 'bg-cyan-500/15 text-cyan-400', codeClass: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_MANUAL_NAME_DATE: { label: 'Manual L5', class: 'bg-cyan-500/15 text-cyan-400', codeClass: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_DEPOSIT: { label: 'Deposito', class: 'bg-violet-500/15 text-violet-400', codeClass: 'bg-violet-500/15 text-violet-400' },
+  CONFIRMED_BUY: { label: 'Compra', class: 'bg-amber-500/15 text-amber-400', codeClass: 'bg-amber-500/15 text-amber-400' },
+  REVIEW_REQUIRED: { label: 'Revision', class: 'bg-rose-500/15 text-rose-400', codeClass: 'bg-rose-500/15 text-rose-400' },
+}
+
+function matchTypeBadgeClass(matchType: string | null): string {
+  if (!matchType) return 'bg-emerald-500/15 text-emerald-400'
+  return MATCH_TYPE_CONFIG[matchType]?.codeClass || 'bg-emerald-500/15 text-emerald-400'
+}
+
+function MatchTypeBadge({ matchType }: { matchType: string }) {
+  const config = MATCH_TYPE_CONFIG[matchType]
+  if (!config) return null
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${config.class}`}>
+      {config.label}
+    </span>
+  )
+}
+
 function makeColumns(onView: (t: Transferencia) => void) {
   return [
     col.accessor('fecha', {
@@ -75,14 +102,21 @@ function makeColumns(onView: (t: Transferencia) => void) {
       enableSorting: false,
       cell: (info) => {
         const codigo = info.getValue()
-        return codigo ? (
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400" title={codigo}>
-            {codigo}
-          </span>
-        ) : (
-          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
-            Pendiente
-          </span>
+        const matchType = info.row.original.matchType
+        if (!codigo) {
+          return (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">
+              Pendiente
+            </span>
+          )
+        }
+        return (
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${matchTypeBadgeClass(matchType)}`} title={codigo}>
+              {codigo}
+            </span>
+            {matchType && <MatchTypeBadge matchType={matchType} />}
+          </div>
         )
       },
     }),
@@ -327,13 +361,14 @@ export function TransferenciasView() {
                 </div>
                 <p className="text-white text-sm truncate">{t.nombreOrdenante || '—'}</p>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <CanalBadge canal={t.canalEmision} />
                     {t.codigoConfirmacion ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400">{t.codigoConfirmacion}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${matchTypeBadgeClass(t.matchType)}`}>{t.codigoConfirmacion}</span>
                     ) : (
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">Pendiente</span>
                     )}
+                    {t.matchType && <MatchTypeBadge matchType={t.matchType} />}
                   </div>
                   <button
                     onClick={() => setSelected(t)}

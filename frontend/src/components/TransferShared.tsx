@@ -38,6 +38,33 @@ export function CanalBadge({ canal }: { canal: string | null }) {
   )
 }
 
+const MATCH_TYPE_LABELS: Record<string, { label: string; class: string }> = {
+  CONFIRMED_AUTO: { label: 'Auto-confirmado', class: 'bg-emerald-500/15 text-emerald-400' },
+  CONFIRMED_MANUAL_REF_ACCOUNT_CI: { label: 'Manual — Ref + Cuenta + CI', class: 'bg-blue-500/15 text-blue-400' },
+  CONFIRMED_MANUAL_CI_ACCOUNT_DATE: { label: 'Manual — CI + Cuenta + Fecha', class: 'bg-blue-500/15 text-blue-400' },
+  CONFIRMED_MANUAL_CI_AMOUNT: { label: 'Manual — CI + Monto', class: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_MANUAL_ACCOUNT_AMOUNT: { label: 'Manual — Cuenta + Monto', class: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_MANUAL_NAME_DATE: { label: 'Manual — Nombre + Fecha', class: 'bg-cyan-500/15 text-cyan-400' },
+  CONFIRMED_DEPOSIT: { label: 'Deposito', class: 'bg-violet-500/15 text-violet-400' },
+  CONFIRMED_BUY: { label: 'Compra', class: 'bg-amber-500/15 text-amber-400' },
+  REVIEW_REQUIRED: { label: 'Requiere revision', class: 'bg-rose-500/15 text-rose-400' },
+}
+
+function MatchTypeBadgeDetail({ matchType, nivelConfianza }: { matchType: string; nivelConfianza: number | null }) {
+  const config = MATCH_TYPE_LABELS[matchType]
+  if (!config) return <span className="text-secondary text-sm">{matchType}</span>
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${config.class}`}>
+        {config.label}
+      </span>
+      {nivelConfianza && (
+        <span className="text-[10px] text-tertiary font-mono">N{nivelConfianza}</span>
+      )}
+    </div>
+  )
+}
+
 function DetailRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
   return (
     <div className="flex justify-between items-center py-2 border-b border-border/50 last:border-b-0">
@@ -60,7 +87,7 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
-  const [editFields, setEditFields] = useState({ card_holder_ci: '', card_number: '', transfer_code: '' })
+  const [editFields, setEditFields] = useState({ card_holder_name: '', card_holder_ci: '', card_number: '', transfer_code: '' })
 
   const { source, data } = transfer
   const isBandec = source === 'bandec'
@@ -68,6 +95,7 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
   const startEditing = () => {
     if (isBandec) return
     setEditFields({
+      card_holder_name: data.card_holder_name || '',
       card_holder_ci: data.card_holder_ci || '',
       card_number: data.card_number || '',
       transfer_code: data.transfer_code || '',
@@ -87,6 +115,7 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
     setEditError('')
     try {
       const changed: Record<string, string> = {}
+      if (editFields.card_holder_name !== (data.card_holder_name || '')) changed.card_holder_name = editFields.card_holder_name
       if (editFields.card_holder_ci !== (data.card_holder_ci || '')) changed.card_holder_ci = editFields.card_holder_ci
       if (editFields.card_number !== (data.card_number || '')) changed.card_number = editFields.card_number
       if (editFields.transfer_code !== (data.transfer_code || '')) changed.transfer_code = editFields.transfer_code
@@ -255,6 +284,14 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
                 {editing ? (
                   <>
                     <div className="flex justify-between items-center py-2 border-b border-border/50">
+                      <span className="text-secondary text-sm">Nombre</span>
+                      <input
+                        value={editFields.card_holder_name}
+                        onChange={(e) => setEditFields(f => ({ ...f, card_holder_name: e.target.value }))}
+                        className="bg-surface border border-border rounded px-2 py-1 text-white text-sm w-48 text-right focus:outline-none focus:border-gold/50"
+                      />
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-border/50">
                       <span className="text-secondary text-sm">CI</span>
                       <input
                         value={editFields.card_holder_ci}
@@ -281,6 +318,7 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
                   </>
                 ) : (
                   <>
+                    <DetailRow label="Nombre" value={data.card_holder_name} />
                     <DetailRow label="CI" value={data.card_holder_ci} mono />
                     <DetailRow label="Cuenta" value={data.card_number} mono />
                     <DetailRow label="Transfer Code" value={data.transfer_code} mono />
@@ -306,6 +344,12 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-white/5 text-tertiary">Pendiente</span>
                   )}
                 </div>
+                {data.matchType && (
+                  <div className="flex justify-between items-center py-2 border-b border-border/50">
+                    <span className="text-secondary text-sm">Tipo Match</span>
+                    <MatchTypeBadgeDetail matchType={data.matchType} nivelConfianza={data.nivelConfianza} />
+                  </div>
+                )}
                 <DetailRow label="Confirmado" value={formatDate(data.confirmedAt)} mono />
                 <div className="flex justify-between items-center py-2 border-b border-border/50">
                   <span className="text-secondary text-sm">Reclamada</span>
