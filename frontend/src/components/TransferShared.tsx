@@ -17,7 +17,7 @@ export function formatDate(val: string | null) {
 }
 
 export function formatCurrency(amount: number) {
-  return `$${amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })}`
+  return amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })
 }
 
 export function CanalBadge({ canal }: { canal: string | null }) {

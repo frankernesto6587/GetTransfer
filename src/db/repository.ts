@@ -26,6 +26,8 @@ export interface TransferenciaFilters {
   refOrigen?: string;
   codigo?: string;
   estado?: 'pendiente' | 'confirmada' | 'reclamada';
+  tipo?: string;
+  source?: string;
   page?: number;
   limit?: number;
   orderBy?: string;
@@ -80,7 +82,7 @@ export async function upsertMany(
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
-  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, codigo, estado, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
+  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, codigo, estado, tipo, source, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
 
   const where: Prisma.TransferenciaWhereInput = {};
 
@@ -105,19 +107,33 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   if (estado === 'pendiente') where.codigoConfirmacion = null;
   if (estado === 'confirmada') { where.codigoConfirmacion = { not: null }; where.claimedAt = null; }
   if (estado === 'reclamada') where.claimedAt = { not: null };
+  if (tipo) where.tipo = tipo;
+  if (source) where.source = source;
 
-  const [data, total, aggregates] = await Promise.all([
+  const standardOrderBy = orderBy && sortableColumns.includes(orderBy as SortableColumn)
+    ? [{ [orderBy]: orderDir }, { id: 'desc' as const }]
+    : [{ fecha: 'desc' as const }, { id: 'desc' as const }];
+
+  const [data, total, aggregates, aggCreditos, aggDebitos] = await Promise.all([
     prisma.transferencia.findMany({
       where,
-      orderBy: orderBy && sortableColumns.includes(orderBy as SortableColumn)
-        ? [{ [orderBy]: orderDir }, { id: 'desc' }]
-        : [{ fecha: 'desc' }, { id: 'desc' }],
+      orderBy: standardOrderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
     prisma.transferencia.count({ where }),
     prisma.transferencia.aggregate({
       where,
+      _sum: { importe: true },
+      _count: { id: true },
+    }),
+    prisma.transferencia.aggregate({
+      where: { ...where, tipo: 'Cr' },
+      _sum: { importe: true },
+      _count: { id: true },
+    }),
+    prisma.transferencia.aggregate({
+      where: { ...where, tipo: 'Db' },
       _sum: { importe: true },
       _count: { id: true },
     }),
@@ -134,6 +150,10 @@ export async function getAll(filters: TransferenciaFilters = {}) {
     totals: {
       importe: aggregates._sum.importe ?? 0,
       cantidad: aggregates._count.id,
+      importeCreditos: aggCreditos._sum.importe ?? 0,
+      cantidadCreditos: aggCreditos._count.id,
+      importeDebitos: aggDebitos._sum.importe ?? 0,
+      cantidadDebitos: aggDebitos._count.id,
     },
   };
 }
@@ -437,6 +457,38 @@ export async function liberarTransferencia(codigo: string) {
       claimedBy: null,
     },
   });
+}
+
+// ── Saldo Inicial ──
+
+export async function getSaldoInicial() {
+  return prisma.transferencia.findFirst({ where: { source: 'saldo_inicial' } });
+}
+
+export async function upsertSaldoInicial(importe: number) {
+  const existing = await getSaldoInicial();
+  if (existing) {
+    return prisma.transferencia.update({
+      where: { id: existing.id },
+      data: { importe },
+    });
+  }
+  return prisma.transferencia.create({
+    data: {
+      fecha: new Date('1987-04-09T00:00:00Z'),
+      tipo: 'Cr',
+      source: 'saldo_inicial',
+      nombreOrdenante: 'Saldo Inicial',
+      importe,
+      refCorriente: 'SALDO-INICIAL',
+      refOrigen: 'SALDO-INICIAL',
+      canalEmision: '',
+    },
+  });
+}
+
+export async function deleteSaldoInicial() {
+  return prisma.transferencia.deleteMany({ where: { source: 'saldo_inicial' } });
 }
 
 // ── ApiToken ──

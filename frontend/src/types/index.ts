@@ -46,6 +46,10 @@ export interface PaginationInfo {
 export interface TotalsInfo {
   importe: number
   cantidad: number
+  importeCreditos?: number
+  cantidadCreditos?: number
+  importeDebitos?: number
+  cantidadDebitos?: number
 }
 
 export interface TransferenciasResponse {

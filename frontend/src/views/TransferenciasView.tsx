@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useSearch } from '@tanstack/react-router'
-import { Calendar, Eye, User, Hash, Wallet, FileText, DollarSign, Code } from 'lucide-react'
+import { Calendar, Eye, User, Hash, Wallet, FileText, DollarSign, Code, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -90,11 +90,24 @@ function makeColumns(onView: (t: Transferencia) => void) {
       header: 'Canal',
       cell: (info) => <CanalBadge canal={info.getValue()} />,
     }),
-    col.accessor('importe', {
-      header: 'Importe',
-      cell: (info) => (
-        <span className="font-mono text-white whitespace-nowrap">{formatCurrency(info.getValue())}</span>
-      ),
+    col.display({
+      id: 'credito',
+      header: 'Crédito',
+      cell: (info) => {
+        const t = info.row.original
+        if (t.tipo !== 'Cr') return <span className="text-tertiary">—</span>
+        return <span className="font-mono whitespace-nowrap text-emerald-400">{formatCurrency(t.importe)}</span>
+      },
+      meta: { align: 'right' },
+    }),
+    col.display({
+      id: 'debito',
+      header: 'Débito',
+      cell: (info) => {
+        const t = info.row.original
+        if (t.tipo !== 'Db') return <span className="text-tertiary">—</span>
+        return <span className="font-mono whitespace-nowrap text-red-400">{formatCurrency(t.importe)}</span>
+      },
       meta: { align: 'right' },
     }),
     col.accessor('codigoConfirmacion', {
@@ -169,6 +182,8 @@ export function TransferenciasView() {
   const [refOrigen, setRefOrigen] = useState(searchParams.refOrigen)
   const [codigo, setCodigo] = useState(searchParams.codigo)
   const [estado, setEstado] = useState(searchParams.estado)
+  const [tipo, setTipo] = useState('')
+  const [source, setSource] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
   const [activePreset, setActivePreset] = useState<DatePresetKey | ''>(
     searchParams.fechaDesde || searchParams.fechaHasta ? '' : 'month',
@@ -209,7 +224,7 @@ export function TransferenciasView() {
     setFechaHasta(fh)
   }, [])
 
-  const activeFilterCount = [debouncedSearch, desde, hasta, canal, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedCodigo, estado].filter(Boolean).length
+  const activeFilterCount = [debouncedSearch, desde, hasta, canal, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedCodigo, estado, tipo, source].filter(Boolean).length
 
   const clearFilters = useCallback(() => {
     setSearch('')
@@ -221,6 +236,8 @@ export function TransferenciasView() {
     setRefOrigen('')
     setCodigo('')
     setEstado('')
+    setTipo('')
+    setSource('')
     setPage(1)
   }, [])
 
@@ -240,6 +257,8 @@ export function TransferenciasView() {
       refOrigen: debouncedRefOrigen || undefined,
       codigo: debouncedCodigo || undefined,
       estado: estado || undefined,
+      tipo: tipo || undefined,
+      source: source || undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
@@ -249,10 +268,11 @@ export function TransferenciasView() {
   const total = transferencias?.pagination?.total ?? 0
   const columns = makeColumns(setSelected)
 
-  const pageData = transferencias?.data ?? []
+  const rawData = transferencias?.data ?? []
+  const pageData = rawData
   const pageTotals = pageData.length > 0
     ? {
-        importe: pageData.reduce((sum, t) => sum + t.importe, 0),
+        importe: pageData.reduce((sum, t) => sum + (t.tipo === 'Cr' ? t.importe : -t.importe), 0),
         cantidad: pageData.length,
       }
     : undefined
@@ -328,11 +348,65 @@ export function TransferenciasView() {
               ]}
               className="w-full md:w-36"
             />
+            <FilterSelect
+              value={tipo}
+              onChange={(v) => { setTipo(v); setPage(1) }}
+              options={[
+                { value: 'Cr', label: 'Crédito' },
+                { value: 'Db', label: 'Débito' },
+              ]}
+              className="w-full md:w-32"
+            />
+            <FilterSelect
+              value={source}
+              onChange={(v) => { setSource(v); setPage(1) }}
+              options={[
+                { value: 'scraper', label: 'Scraper' },
+                { value: 'statement', label: 'Estado de Cuenta' },
+              ]}
+              className="w-full md:w-40"
+            />
             <FilterInput icon={DollarSign} label="Importe min" type="number" value={desde} onChange={(v) => { setDesde(v); setPage(1) }} className="w-full md:w-28" />
             <FilterInput icon={DollarSign} label="Importe max" type="number" value={hasta} onChange={(v) => { setHasta(v); setPage(1) }} className="w-full md:w-28" />
           </>
         }
       />
+
+      {/* Summary card */}
+      {transferencias?.totals && (transferencias.totals.importeCreditos !== undefined || transferencias.totals.importeDebitos !== undefined) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <div className="flex items-center gap-2 text-secondary text-sm mb-1">
+              <ArrowDownLeft size={14} className="text-emerald-400" />
+              Créditos
+            </div>
+            <div className="font-mono text-emerald-400 text-lg font-semibold">
+              {formatCurrency(transferencias.totals.importeCreditos ?? 0)}
+            </div>
+            <div className="text-tertiary text-xs">{(transferencias.totals.cantidadCreditos ?? 0).toLocaleString('es-CU')} transferencias</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <div className="flex items-center gap-2 text-secondary text-sm mb-1">
+              <ArrowUpRight size={14} className="text-red-400" />
+              Débitos
+            </div>
+            <div className="font-mono text-red-400 text-lg font-semibold">
+              {formatCurrency(transferencias.totals.importeDebitos ?? 0)}
+            </div>
+            <div className="text-tertiary text-xs">{(transferencias.totals.cantidadDebitos ?? 0).toLocaleString('es-CU')} transferencias</div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <div className="flex items-center gap-2 text-secondary text-sm mb-1">
+              <DollarSign size={14} className="text-gold" />
+              Balance
+            </div>
+            <div className="font-mono text-white text-lg font-semibold">
+              {formatCurrency((transferencias.totals.importeCreditos ?? 0) - (transferencias.totals.importeDebitos ?? 0))}
+            </div>
+            <div className="text-tertiary text-xs">{(transferencias.totals.cantidad ?? 0).toLocaleString('es-CU')} transferencias</div>
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -357,7 +431,9 @@ export function TransferenciasView() {
               <div className="px-4 py-3 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-secondary text-sm font-mono">{displayFecha(t.fecha)}</span>
-                  <span className="font-mono text-white font-medium">{formatCurrency(t.importe)}</span>
+                  <span className={`font-mono font-medium ${t.tipo === 'Cr' ? 'text-emerald-400' : t.tipo === 'Db' ? 'text-red-400' : 'text-white'}`}>
+                    {t.tipo === 'Db' ? '- ' : ''}{formatCurrency(t.importe)}
+                  </span>
                 </div>
                 <p className="text-white text-sm truncate">{t.nombreOrdenante || '—'}</p>
                 <div className="flex items-center justify-between">

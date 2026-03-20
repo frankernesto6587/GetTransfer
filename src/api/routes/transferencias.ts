@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as repo from '../../db/repository';
+import { requireRole } from '../middleware/auth';
 
 const querySchema = z.object({
   fecha: z.string().optional(),
@@ -15,6 +16,8 @@ const querySchema = z.object({
   refOrigen: z.string().optional(),
   codigo: z.string().optional(),
   estado: z.enum(['pendiente', 'confirmada', 'reclamada']).optional(),
+  tipo: z.enum(['Db', 'Cr']).optional(),
+  source: z.enum(['scraper', 'statement']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(50),
   orderBy: z.string().optional(),
@@ -42,5 +45,26 @@ export async function transferenciaRoutes(app: FastifyInstance) {
 
   app.get('/api/resumen', async () => {
     return repo.getResumen();
+  });
+
+  // ── Saldo Inicial ──
+
+  app.get('/api/saldo-inicial', { preHandler: requireRole('admin') }, async () => {
+    const saldo = await repo.getSaldoInicial();
+    return saldo || null;
+  });
+
+  app.put('/api/saldo-inicial', { preHandler: requireRole('admin') }, async (request, reply) => {
+    const schema = z.object({ importe: z.number().positive() });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.flatten() });
+    }
+    return repo.upsertSaldoInicial(parsed.data.importe);
+  });
+
+  app.delete('/api/saldo-inicial', { preHandler: requireRole('admin') }, async () => {
+    await repo.deleteSaldoInicial();
+    return { ok: true };
   });
 }

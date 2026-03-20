@@ -22,7 +22,7 @@ import type { PaginationInfo, TotalsInfo } from '../types'
 export type { SortingState }
 
 function formatCurrency(amount: number) {
-  return `$${amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })}`
+  return amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })
 }
 
 interface DataTableProps<T> {
@@ -64,7 +64,7 @@ export function DataTable<T>({
   pageTotals,
   onRowClick,
   mobileCard,
-  alwaysVisibleColumns = ['fecha', 'importe'],
+  alwaysVisibleColumns = ['fecha', 'credito', 'debito'],
   onRefresh,
   title,
   headerExtra,
@@ -319,7 +319,21 @@ export function DataTable<T>({
               <span className="text-tertiary ml-1">({pageTotals.cantidad})</span>
             </span>
           )}
-          {totals && (
+          {totals && totals.importeCreditos !== undefined && (
+            <span className="text-secondary">
+              Cr:{' '}
+              <span className="text-emerald-400 font-mono">{formatCurrency(totals.importeCreditos)}</span>
+              <span className="text-tertiary ml-1">({totals.cantidadCreditos})</span>
+            </span>
+          )}
+          {totals && totals.importeDebitos !== undefined && (
+            <span className="text-secondary">
+              Db:{' '}
+              <span className="text-red-400 font-mono">{formatCurrency(totals.importeDebitos)}</span>
+              <span className="text-tertiary ml-1">({totals.cantidadDebitos})</span>
+            </span>
+          )}
+          {totals && totals.importeCreditos === undefined && (
             <span className="text-secondary">
               Total:{' '}
               <span className="text-white font-mono">{formatCurrency(totals.importe)}</span>

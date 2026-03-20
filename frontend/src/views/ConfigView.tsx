@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Key, RefreshCw, Copy, Check, Trash2, AlertCircle, Radio, Clock, Send, Download, Wifi, WifiOff, Link, Unlink, Server, Plug } from 'lucide-react'
-import { getActiveToken, generateToken, deleteToken, getMonitorConfig, updateMonitorConfig, getMonitorStatus, triggerScrape, forceCheck, getWebhookInfo, registerWebhook, unregisterWebhook, getOdooConfig, updateOdooConfig, testOdooConnection } from '../lib/api'
+import { Key, RefreshCw, Copy, Check, Trash2, AlertCircle, Radio, Clock, Send, Download, Wifi, WifiOff, Link, Unlink, Server, Plug, DollarSign } from 'lucide-react'
+import { getActiveToken, generateToken, deleteToken, getMonitorConfig, updateMonitorConfig, getMonitorStatus, triggerScrape, forceCheck, getWebhookInfo, registerWebhook, unregisterWebhook, getOdooConfig, updateOdooConfig, testOdooConnection, getSaldoInicial, upsertSaldoInicial, deleteSaldoInicial } from '../lib/api'
 import type { MonitorConfig } from '../types'
 
 export function ConfigView() {
@@ -35,6 +35,11 @@ export function ConfigView() {
   const [odooForm, setOdooForm] = useState({ api_url: '', api_key: '' })
   const [odooSuccess, setOdooSuccess] = useState('')
   const [odooTestResult, setOdooTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  // Saldo inicial state
+  const [saldoImporte, setSaldoImporte] = useState('')
+  const [saldoSuccess, setSaldoSuccess] = useState('')
+  const [showDeleteSaldo, setShowDeleteSaldo] = useState(false)
 
   // ── Queries ──
   const tokenQuery = useQuery({
@@ -70,6 +75,15 @@ export function ConfigView() {
       const config = await getOdooConfig()
       setOdooForm({ api_url: config.api_url || '', api_key: config.api_key || '' })
       return config
+    },
+  })
+
+  const saldoQuery = useQuery({
+    queryKey: ['saldo-inicial'],
+    queryFn: async () => {
+      const saldo = await getSaldoInicial()
+      if (saldo) setSaldoImporte(String(saldo.importe))
+      return saldo
     },
   })
 
@@ -132,6 +146,28 @@ export function ConfigView() {
     mutationFn: () => triggerScrape(scrapeMonth, scrapeYear),
     onSuccess: (result) => setScrapeResult(result.message),
     onError: (err: any) => setError(err.message || 'Error en scraping'),
+  })
+
+  const saveSaldoMut = useMutation({
+    mutationFn: () => upsertSaldoInicial(parseFloat(saldoImporte)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saldo-inicial'] })
+      setSaldoSuccess('Saldo inicial guardado')
+      setTimeout(() => setSaldoSuccess(''), 3000)
+    },
+    onError: (err: any) => setError(err.message || 'Error al guardar saldo inicial'),
+  })
+
+  const deleteSaldoMut = useMutation({
+    mutationFn: () => deleteSaldoInicial(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saldo-inicial'] })
+      setSaldoImporte('')
+      setShowDeleteSaldo(false)
+      setSaldoSuccess('Saldo inicial eliminado')
+      setTimeout(() => setSaldoSuccess(''), 3000)
+    },
+    onError: (err: any) => setError(err.message || 'Error al eliminar saldo inicial'),
   })
 
   const token = tokenQuery.data?.token ?? null
@@ -293,6 +329,58 @@ export function ConfigView() {
               {odooTestResult.message}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Saldo Inicial Section */}
+      <div className="rounded-xl border border-border bg-surface p-6 mb-6">
+        <div className="flex items-center gap-3 mb-6">
+          <DollarSign size={20} className="text-gold" />
+          <h2 className="font-headline text-lg font-semibold text-white">Saldo Inicial</h2>
+        </div>
+        <p className="text-sm text-secondary mb-4">
+          Importe de credito inicial para que el balance refleje el saldo real de la cuenta.
+          {saldoQuery.data && <span className="text-tertiary ml-1">(Actualmente configurado)</span>}
+        </p>
+        <div className="flex flex-col md:flex-row items-stretch md:items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-tertiary uppercase tracking-wider mb-1.5">Importe (CUP)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0.00"
+              value={saldoImporte}
+              onChange={(e) => setSaldoImporte(e.target.value)}
+              className="w-full md:w-64 bg-page border border-border rounded-lg px-3 py-2 text-sm text-white placeholder:text-tertiary focus:outline-none focus:border-gold/50 transition-colors font-mono"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => saveSaldoMut.mutate()}
+              disabled={saveSaldoMut.isPending || !saldoImporte || parseFloat(saldoImporte) <= 0}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              {saveSaldoMut.isPending ? 'Guardando...' : 'Guardar'}
+            </button>
+            {saldoQuery.data && !showDeleteSaldo && (
+              <button
+                onClick={() => setShowDeleteSaldo(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer text-sm"
+              >
+                <Trash2 size={14} />
+                Eliminar
+              </button>
+            )}
+            {showDeleteSaldo && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-red-400">Eliminar saldo inicial?</span>
+                <button onClick={() => deleteSaldoMut.mutate()} className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm cursor-pointer">Confirmar</button>
+                <button onClick={() => setShowDeleteSaldo(false)} className="px-3 py-1.5 bg-white/5 text-secondary rounded-lg hover:bg-white/10 transition-colors text-sm cursor-pointer">Cancelar</button>
+              </div>
+            )}
+            {saldoSuccess && <span className="flex items-center gap-1 text-sm text-emerald-400"><Check size={14} />{saldoSuccess}</span>}
+          </div>
         </div>
       </div>
 

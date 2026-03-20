@@ -35,6 +35,8 @@ export interface TransferenciasParams {
   refOrigen?: string
   codigo?: string
   estado?: string
+  tipo?: string
+  source?: string
   orderBy?: string
   orderDir?: 'asc' | 'desc'
 }
@@ -55,6 +57,8 @@ export function buildTransferenciasUrl(params: TransferenciasParams): string {
   if (params.refOrigen) sp.set('refOrigen', params.refOrigen)
   if (params.codigo) sp.set('codigo', params.codigo)
   if (params.estado) sp.set('estado', params.estado)
+  if (params.tipo) sp.set('tipo', params.tipo)
+  if (params.source) sp.set('source', params.source)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
   if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
@@ -510,6 +514,32 @@ export async function createInvitation(email: string, role: string): Promise<Inv
 
 export async function deleteInvitation(id: number): Promise<void> {
   const res = await apiFetch(`/api/invitations/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+// ── Saldo Inicial API ──
+
+export async function getSaldoInicial(): Promise<Transferencia | null> {
+  const res = await apiFetch('/api/saldo-inicial')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function upsertSaldoInicial(importe: number): Promise<Transferencia> {
+  const res = await apiFetch('/api/saldo-inicial', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ importe }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function deleteSaldoInicial(): Promise<void> {
+  const res = await apiFetch('/api/saldo-inicial', { method: 'DELETE' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
 
