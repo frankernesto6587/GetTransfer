@@ -13,7 +13,7 @@ export async function statementRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'No se recibió ningún archivo' });
     }
 
-    if (!data.filename.endsWith('.zip')) {
+    if (!data.filename.toLowerCase().endsWith('.zip')) {
       return reply.status(400).send({ error: 'El archivo debe ser un .zip' });
     }
 

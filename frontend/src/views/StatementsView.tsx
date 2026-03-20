@@ -35,7 +35,7 @@ export function StatementsView() {
   })
 
   const handleFile = (file: File) => {
-    if (!file.name.endsWith('.zip')) {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
       setErrors([{ file: file.name, type: 'error', message: 'El archivo debe ser un .zip' }])
       return
     }
@@ -97,7 +97,7 @@ export function StatementsView() {
         <input
           ref={fileRef}
           type="file"
-          accept=".zip"
+          accept=".zip,.ZIP"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0]
