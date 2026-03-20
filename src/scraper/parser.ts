@@ -84,7 +84,9 @@ function parseTextoFormat(obs: string): Partial<TransferenciaEntrada> {
   result.numDebito = extractField(obs, /\[DEBITO:(\d+)\]/);
 
   // Canal de emisión más específico
-  if (obs.includes('BANCA MOVIL')) result.canalEmision = 'BANCA MOVIL';
+  if (obs.includes('BANCAMOVIL-BPA')) result.canalEmision = 'BANCAMOVIL-BPA';
+  else if (obs.includes('TRANSFERMOVIL')) result.canalEmision = 'TRANSFERMOVIL';
+  else if (obs.includes('BANCA MOVIL')) result.canalEmision = 'BANCA MOVIL';
   else if (obs.includes('BANCA REMOTA')) result.canalEmision = 'BANCA REMOTA';
 
   // Tarjeta#: 920506XXXXXX4118

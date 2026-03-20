@@ -26,13 +26,25 @@ const SALDO_LABELS_BALANCE = [
 const SALDO_LABELS_SKIP = [
   'Saldo Contable al Cierre del D',
   'Saldo Confirmado Final',
+  'Saldo Sobre Giro',
 ];
+
+/** Decode HTML entities so &lt; → <, &gt; → >, etc. Mirrors what the browser's textContent does. */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
 
 export function parseXMLFile(filename: string, xmlContent: string): ParsedStatementFile {
   const parser = new XMLParser({
     ignoreAttributes: false,
     trimValues: true,
     processEntities: false,
+    stopNodes: ['*.Observaciones'],
   });
 
   const parsed = parser.parse(xmlContent);
@@ -58,13 +70,16 @@ export function parseXMLFile(filename: string, xmlContent: string): ParsedStatem
   const records: RawXMLRecord[] = [];
 
   for (const row of rows) {
-    const observ = String(row.Observaciones || row.observ || '').trim();
+    const observ = decodeEntities(String(row.Observaciones || row.observ || '').trim());
 
     // Check if it's a saldo row
     const isSaldoBalance = SALDO_LABELS_BALANCE.some(label => observ.startsWith(label));
     const isSaldoSkip = SALDO_LABELS_SKIP.some(label => observ.startsWith(label));
 
     if (isSaldoSkip) continue;
+
+    // Generic catch-all: any row starting with "Saldo " is a balance row, not an operation
+    if (observ.startsWith('Saldo ') && !isSaldoBalance) continue;
 
     if (isSaldoBalance) {
       const importe = parseFloat(String(row.Importe || row.importe || '0').replace(/,/g, ''));
