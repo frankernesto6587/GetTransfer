@@ -28,7 +28,7 @@ export interface TransferenciaEntrada {
 }
 
 /** Convert DD/MM/YY to YYYY-MM-DD */
-function convertFecha(fecha: string): string {
+export function convertFecha(fecha: string): string {
   const parts = fecha.split('/');
   if (parts.length === 3) {
     const [dd, mm, yy] = parts;
