@@ -10,9 +10,10 @@ model Transferencia {
   id                  Int      @id @default(autoincrement())
   fecha               DateTime
   refCorriente        String
-  refOrigen           String   @unique
+  refOrigen           String
   importe             Float
   tipo                String
+  source              String   @default("scraper")
   nombreOrdenante     String   @default("")
   ciOrdenante         String   @default("")
   tarjetaOrdenante    String   @default("")
@@ -38,6 +39,7 @@ model Transferencia {
   matchType           String?
   nivelConfianza      Int?
 
+  @@unique([refCorriente, refOrigen, importe, fecha, tipo])
   @@index([fecha])
   @@index([nombreOrdenante])
   @@index([importe])
@@ -89,6 +91,25 @@ model User {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  uploads   StatementUpload[]
+}
+
+model StatementUpload {
+  id              Int      @id @default(autoincrement())
+  filename        String
+  fileHash        String   @unique
+  filesProcessed  Int
+  totalRecords    Int
+  nuevas          Int
+  fechaDesde      String
+  fechaHasta      String
+  saldoInicial    Float?
+  saldoFinal      Float?
+  createdAt       DateTime @default(now())
+
+  uploadedBy      Int
+  user            User     @relation(fields: [uploadedBy], references: [id])
 }
 
 model Invitation {

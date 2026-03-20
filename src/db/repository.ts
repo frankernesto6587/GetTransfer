@@ -32,14 +32,23 @@ export interface TransferenciaFilters {
   orderDir?: 'asc' | 'desc';
 }
 
-export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaEntrada[] }> {
-  // Find which refOrigen already exist to identify truly new ones
+function compositeKey(t: { refCorriente: string; refOrigen: string; importe: number; fecha: Date; tipo: string }): string {
+  return `${t.refCorriente}|${t.refOrigen}|${t.importe}|${t.fecha.toISOString().slice(0, 10)}|${t.tipo}`;
+}
+
+export async function upsertMany(
+  transfers: TransferenciaEntrada[],
+  opts?: { source?: string }
+): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaEntrada[] }> {
+  // Find which composite keys already exist
   const refs = transfers.map(t => t.refOrigen);
   const existing = await prisma.transferencia.findMany({
     where: { refOrigen: { in: refs } },
-    select: { refOrigen: true },
+    select: { refCorriente: true, refOrigen: true, importe: true, fecha: true, tipo: true },
   });
-  const existingRefs = new Set(existing.map(e => e.refOrigen));
+  const existingKeys = new Set(existing.map(e => compositeKey(e)));
+
+  const source = opts?.source || 'scraper';
 
   const result = await prisma.transferencia.createMany({
     data: transfers.map(t => ({
@@ -48,6 +57,7 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
       refOrigen: t.refOrigen,
       importe: t.importe,
       tipo: t.tipo,
+      source,
       nombreOrdenante: t.nombreOrdenante,
       ciOrdenante: t.ciOrdenante,
       tarjetaOrdenante: t.tarjetaOrdenante,
@@ -65,7 +75,7 @@ export async function upsertMany(transfers: TransferenciaEntrada[]): Promise<{ t
     skipDuplicates: true,
   });
 
-  const nuevasList = transfers.filter(t => !existingRefs.has(t.refOrigen));
+  const nuevasList = transfers.filter(t => !existingKeys.has(compositeKey(t)));
   return { total: transfers.length, nuevas: result.count, nuevasList };
 }
 
@@ -129,7 +139,7 @@ export async function getAll(filters: TransferenciaFilters = {}) {
 }
 
 export async function getByRefOrigen(refOrigen: string) {
-  return prisma.transferencia.findUnique({ where: { refOrigen } });
+  return prisma.transferencia.findFirst({ where: { refOrigen } });
 }
 
 export async function getResumen() {
