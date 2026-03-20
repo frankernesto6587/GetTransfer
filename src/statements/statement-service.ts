@@ -1,6 +1,6 @@
 import { extractZip, parseXMLFile, computeFileHash } from './statement-parser';
 import { transformRecords } from './statement-transformer';
-import { validateBalances, validateContinuity, validateAgainstDB, validateNoDuplicateHash } from './statement-validator';
+import { validateBalances, validateContinuity, validateNoDuplicateHash } from './statement-validator';
 import { upsertMany, prisma } from '../db/repository';
 import { StatementUploadResult, ValidationError } from './types';
 
@@ -38,21 +38,19 @@ export async function processStatementUpload(
   const contError = validateContinuity(parsedFiles);
   if (contError) throw new StatementValidationError([contError]);
 
-  // 5. Validate against DB
-  const dbError = await validateAgainstDB(parsedFiles);
-  if (dbError) throw new StatementValidationError([dbError]);
-
-  // 6. Transform records
+  // 5. Transform records
   const allTransfers = parsedFiles.flatMap(f => transformRecords(f));
 
-  // 7. Compute date range
+  if (allTransfers.length === 0) throw new Error('El ZIP no contiene operaciones');
+
+  // 6. Compute date range
   const allDates = allTransfers.map(t => t.fecha.toISOString().slice(0, 10)).sort();
   const fechaDesde = allDates[0] || '';
   const fechaHasta = allDates[allDates.length - 1] || '';
 
-  // 8. Transaction: create upload record + upsert transfers
-  const firstFile = parsedFiles[0];
-  const lastFile = parsedFiles[parsedFiles.length - 1];
+  // 7. Transaction: create upload record + upsert transfers
+  const firstFile = parsedFiles[0]!;
+  const lastFile = parsedFiles[parsedFiles.length - 1]!;
 
   const result = await prisma.$transaction(async (tx) => {
     const upload = await tx.statementUpload.create({

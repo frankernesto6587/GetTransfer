@@ -30,6 +30,7 @@ export async function statementRoutes(app: FastifyInstance) {
       if (err instanceof StatementValidationError) {
         return reply.status(400).send({ error: 'Errores de validación', details: err.errors });
       }
+      request.log.error({ err, filename: data.filename }, 'Statement upload failed');
       return reply.status(500).send({ error: err.message });
     }
   });
