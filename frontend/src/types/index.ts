@@ -277,3 +277,38 @@ export interface StatementUploadsResponse {
   data: StatementUpload[]
   pagination: PaginationInfo
 }
+
+// ── Dashboard ──
+
+export interface DashboardDailySeries {
+  fecha: string
+  gtCreditos: number
+  gtDebitos: number
+  matchImporte: number
+}
+
+export interface DashboardResponse {
+  gtTotals: {
+    importe: number
+    cantidad: number
+    importeCreditos: number
+    cantidadCreditos: number
+    importeDebitos: number
+    cantidadDebitos: number
+  }
+  matchStats: {
+    total: number
+    auto: number
+    manual: number
+    deposito: number
+    compra: number
+    revision: number
+  }
+  pendientes: {
+    cantidad: number
+    importe: number
+  }
+  porDia: DashboardDailySeries[]
+  recentMatches: MatchedTransfer[]
+  odooAvailable: boolean
+}

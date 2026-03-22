@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, MatchesResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, MatchesResponse, DashboardResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -117,6 +117,29 @@ export const matchesQuery = (params: MatchesParams) => {
   return {
     queryKey: ['matches', params] as const,
     queryFn: () => fetcher<MatchesResponse>(url),
+  }
+}
+
+// ── Dashboard ──
+
+export interface DashboardParams {
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+export function buildDashboardUrl(params: DashboardParams): string {
+  const sp = new URLSearchParams()
+  if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
+  if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
+  const qs = sp.toString()
+  return `/api/dashboard${qs ? `?${qs}` : ''}`
+}
+
+export const dashboardQuery = (params: DashboardParams) => {
+  const url = buildDashboardUrl(params)
+  return {
+    queryKey: ['dashboard', params] as const,
+    queryFn: () => fetcher<DashboardResponse>(url),
   }
 }
 

@@ -645,3 +645,95 @@ export async function getAllInvitations() {
 export async function deleteInvitation(id: number) {
   return prisma.invitation.delete({ where: { id } });
 }
+
+// ── Dashboard ──
+
+export interface DashboardFilters {
+  fechaDesde?: string;
+  fechaHasta?: string;
+}
+
+export async function getDashboardData(filters: DashboardFilters = {}) {
+  const dateWhere: Prisma.TransferenciaWhereInput = {};
+  if (filters.fechaDesde || filters.fechaHasta) {
+    dateWhere.fecha = {};
+    if (filters.fechaDesde) (dateWhere.fecha as any).gte = new Date(filters.fechaDesde + 'T00:00:00Z');
+    if (filters.fechaHasta) (dateWhere.fecha as any).lte = new Date(filters.fechaHasta + 'T23:59:59Z');
+  }
+
+  const confirmedWhere: Prisma.TransferenciaWhereInput = { ...dateWhere, codigoConfirmacion: { not: null } };
+  const pendingWhere: Prisma.TransferenciaWhereInput = { ...dateWhere, codigoConfirmacion: null };
+
+  const [
+    aggTotal,
+    aggCreditos,
+    aggDebitos,
+    matchStatsRaw,
+    aggPendientes,
+    dailyGt,
+    dailyMatches,
+    recentMatches,
+  ] = await Promise.all([
+    // GT Totals
+    prisma.transferencia.aggregate({ where: dateWhere, _sum: { importe: true }, _count: { id: true } }),
+    prisma.transferencia.aggregate({ where: { ...dateWhere, tipo: 'Cr' }, _sum: { importe: true }, _count: { id: true } }),
+    prisma.transferencia.aggregate({ where: { ...dateWhere, tipo: 'Db' }, _sum: { importe: true }, _count: { id: true } }),
+    // Match stats by type
+    prisma.transferencia.groupBy({ by: ['matchType'], where: confirmedWhere, _count: { id: true } }),
+    // Pendientes
+    prisma.transferencia.aggregate({ where: pendingWhere, _sum: { importe: true }, _count: { id: true } }),
+    // Daily GT series (by tipo)
+    prisma.transferencia.groupBy({ by: ['fecha', 'tipo'], where: dateWhere, _sum: { importe: true }, orderBy: { fecha: 'asc' } }),
+    // Daily matches series
+    prisma.transferencia.groupBy({ by: ['fecha'], where: confirmedWhere, _sum: { importe: true }, orderBy: { fecha: 'asc' } }),
+    // Recent matches
+    prisma.transferencia.findMany({ where: confirmedWhere, orderBy: { confirmedAt: 'desc' }, take: 15 }),
+  ]);
+
+  // Parse match stats
+  const matchStats = { total: 0, auto: 0, manual: 0, deposito: 0, compra: 0, revision: 0 };
+  for (const row of matchStatsRaw) {
+    const mt = row.matchType || '';
+    const count = row._count.id;
+    matchStats.total += count;
+    if (mt === 'CONFIRMED_AUTO') matchStats.auto = count;
+    else if (mt.startsWith('CONFIRMED_MANUAL')) matchStats.manual += count;
+    else if (mt === 'CONFIRMED_DEPOSIT') matchStats.deposito = count;
+    else if (mt === 'CONFIRMED_BUY') matchStats.compra = count;
+    else if (mt === 'REVIEW_REQUIRED') matchStats.revision = count;
+  }
+
+  // Build daily series — merge Cr/Db/match by fecha
+  const dayMap = new Map<string, { fecha: string; gtCreditos: number; gtDebitos: number; matchImporte: number }>();
+  for (const row of dailyGt) {
+    const key = row.fecha.toISOString().slice(0, 10);
+    if (!dayMap.has(key)) dayMap.set(key, { fecha: key, gtCreditos: 0, gtDebitos: 0, matchImporte: 0 });
+    const entry = dayMap.get(key)!;
+    if (row.tipo === 'Cr') entry.gtCreditos = row._sum.importe ?? 0;
+    else if (row.tipo === 'Db') entry.gtDebitos = row._sum.importe ?? 0;
+  }
+  for (const row of dailyMatches) {
+    const key = row.fecha.toISOString().slice(0, 10);
+    if (!dayMap.has(key)) dayMap.set(key, { fecha: key, gtCreditos: 0, gtDebitos: 0, matchImporte: 0 });
+    dayMap.get(key)!.matchImporte = row._sum.importe ?? 0;
+  }
+  const porDia = Array.from(dayMap.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  return {
+    gtTotals: {
+      importe: aggTotal._sum.importe ?? 0,
+      cantidad: aggTotal._count.id,
+      importeCreditos: aggCreditos._sum.importe ?? 0,
+      cantidadCreditos: aggCreditos._count.id,
+      importeDebitos: aggDebitos._sum.importe ?? 0,
+      cantidadDebitos: aggDebitos._count.id,
+    },
+    matchStats,
+    pendientes: {
+      cantidad: aggPendientes._count.id,
+      importe: aggPendientes._sum.importe ?? 0,
+    },
+    porDia,
+    recentMatches,
+  };
+}
