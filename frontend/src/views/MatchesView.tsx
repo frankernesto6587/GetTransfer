@@ -242,7 +242,17 @@ export function MatchesView() {
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6">
-        <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Matches</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Matches</h1>
+          <a
+            href="/Matches.xlsx"
+            download="Matches.xlsx"
+            className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            title="Descargar plantilla Excel"
+          >
+            <Download size={16} />
+          </a>
+        </div>
         <p className="text-secondary mt-1">
           {total > 0 ? (
             <>
@@ -370,16 +380,6 @@ export function MatchesView() {
               queryClient.invalidateQueries({ queryKey: ['transferencias'] })
             }}
             title="Matches"
-            headerExtra={
-              <a
-                href="/Matches.xlsx"
-                download="Matches.xlsx"
-                className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors ml-auto md:ml-0"
-                title="Descargar plantilla Excel"
-              >
-                <Download size={16} />
-              </a>
-            }
             loading={isFetching}
             mobileCard={(item) => (
               <div className="px-4 py-3 space-y-1.5">
