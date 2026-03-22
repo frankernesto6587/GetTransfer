@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, User, Hash, Wallet, Code, DollarSign, Eye, WifiOff } from 'lucide-react'
+import { Calendar, User, Hash, Wallet, Code, DollarSign, Eye, WifiOff, Download } from 'lucide-react'
 import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -370,6 +370,16 @@ export function MatchesView() {
               queryClient.invalidateQueries({ queryKey: ['transferencias'] })
             }}
             title="Matches"
+            headerExtra={
+              <a
+                href="/Matches.xlsx"
+                download="Matches.xlsx"
+                className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                title="Descargar plantilla Excel"
+              >
+                <Download size={16} />
+              </a>
+            }
             loading={isFetching}
             mobileCard={(item) => (
               <div className="px-4 py-3 space-y-1.5">
