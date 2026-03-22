@@ -15,7 +15,7 @@ const querySchema = z.object({
   cuenta: z.string().optional(),
   refOrigen: z.string().optional(),
   codigo: z.string().optional(),
-  estado: z.enum(['pendiente', 'confirmada', 'reclamada']).optional(),
+  estado: z.enum(['pendiente', 'confirmada', 'reclamada', 'matched']).optional(),
   tipo: z.enum(['Db', 'Cr']).optional(),
   source: z.enum(['scraper', 'statement']).optional(),
   page: z.coerce.number().int().min(1).default(1),

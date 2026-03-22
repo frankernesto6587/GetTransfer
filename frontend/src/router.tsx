@@ -15,6 +15,7 @@ import { ConfigView } from './views/ConfigView'
 import { UsuariosView } from './views/UsuariosView'
 import { AyudaView } from './views/AyudaView'
 import { StatementsView } from './views/StatementsView'
+import { MatchesView } from './views/MatchesView'
 
 // ── Root route ──
 const rootRoute = createRootRoute({
@@ -111,6 +112,12 @@ const statementsRoute = createRoute({
   component: StatementsView,
 })
 
+const matchesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/matches',
+  component: MatchesView,
+})
+
 const ayudaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ayuda',
@@ -127,6 +134,7 @@ const routeTree = rootRoute.addChildren([
   transferenciasOdooRoute,
   reportesRoute,
   statementsRoute,
+  matchesRoute,
   configRoute,
   usuariosRoute,
   ayudaRoute,

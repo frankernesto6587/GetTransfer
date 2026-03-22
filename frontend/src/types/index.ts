@@ -218,6 +218,26 @@ export type TransferDetailData =
   | { source: 'bandec'; data: Transferencia }
   | { source: 'odoo'; data: TransferenciaOdooItem }
 
+// ── Matches (GT + Odoo combined) ──
+
+export interface MatchedTransfer extends Transferencia {
+  odoo_order_date: string | null
+  odoo_order_name: string | null
+  odoo_card_holder_name: string | null
+  odoo_card_holder_ci: string | null
+  odoo_card_number: string | null
+  odoo_payment_type: string | null
+  odoo_session_name: string | null
+  odoo_transfer_code: string | null
+}
+
+export interface MatchesResponse {
+  data: MatchedTransfer[]
+  pagination: PaginationInfo
+  totals?: TotalsInfo
+  odooAvailable: boolean
+}
+
 // ── Statement Upload types ──
 
 export interface StatementUpload {

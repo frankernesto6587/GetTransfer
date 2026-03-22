@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, MatchesResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -70,6 +70,53 @@ export const transferenciasQuery = (params: TransferenciasParams) => {
   return {
     queryKey: ['transferencias', params] as const,
     queryFn: () => fetcher<TransferenciasResponse>(url),
+  }
+}
+
+// ── Matches (GT + Odoo) ──
+
+export interface MatchesParams {
+  page?: number
+  limit?: number
+  fechaDesde?: string
+  fechaHasta?: string
+  nombre?: string
+  ci?: string
+  cuenta?: string
+  codigo?: string
+  canal?: string
+  matchType?: string
+  desde?: number
+  hasta?: number
+  orderBy?: string
+  orderDir?: 'asc' | 'desc'
+}
+
+export function buildMatchesUrl(params: MatchesParams): string {
+  const sp = new URLSearchParams()
+  if (params.page) sp.set('page', String(params.page))
+  if (params.limit) sp.set('limit', String(params.limit))
+  if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
+  if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
+  if (params.nombre) sp.set('nombre', params.nombre)
+  if (params.ci) sp.set('ci', params.ci)
+  if (params.cuenta) sp.set('cuenta', params.cuenta)
+  if (params.codigo) sp.set('codigo', params.codigo)
+  if (params.canal) sp.set('canal', params.canal)
+  if (params.matchType) sp.set('matchType', params.matchType)
+  if (params.desde) sp.set('desde', String(params.desde))
+  if (params.hasta) sp.set('hasta', String(params.hasta))
+  if (params.orderBy) sp.set('orderBy', params.orderBy)
+  if (params.orderDir) sp.set('orderDir', params.orderDir)
+  const qs = sp.toString()
+  return `/api/matches${qs ? `?${qs}` : ''}`
+}
+
+export const matchesQuery = (params: MatchesParams) => {
+  const url = buildMatchesUrl(params)
+  return {
+    queryKey: ['matches', params] as const,
+    queryFn: () => fetcher<MatchesResponse>(url),
   }
 }
 

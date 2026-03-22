@@ -11,6 +11,7 @@ import {
   Database,
   Clock,
   FileUp,
+  GitMerge,
 } from "lucide-react";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { useAuth } from "../contexts/AuthContext";
@@ -43,6 +44,12 @@ const navItems: NavItem[] = [
     icon: Clock,
     label: "Odoo Legacy",
     to: "/confirmar-odoo-legacy",
+    requireConfirm: true,
+  },
+  {
+    icon: GitMerge,
+    label: "Matches",
+    to: "/matches",
     requireConfirm: true,
   },
   { icon: BarChart3, label: "Reportes", to: "/reportes" },

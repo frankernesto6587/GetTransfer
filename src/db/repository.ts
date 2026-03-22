@@ -25,7 +25,8 @@ export interface TransferenciaFilters {
   cuenta?: string;
   refOrigen?: string;
   codigo?: string;
-  estado?: 'pendiente' | 'confirmada' | 'reclamada';
+  estado?: 'pendiente' | 'confirmada' | 'reclamada' | 'matched';
+  matchType?: string;
   tipo?: string;
   source?: string;
   page?: number;
@@ -82,7 +83,7 @@ export async function upsertMany(
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
-  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, codigo, estado, tipo, source, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
+  const { fecha, fechaDesde, fechaHasta, nombre, desde, hasta, canal, ci, cuenta, refOrigen, codigo, estado, matchType, tipo, source, page = 1, limit = 50, orderBy, orderDir = 'desc' } = filters;
 
   const where: Prisma.TransferenciaWhereInput = {};
 
@@ -107,6 +108,14 @@ export async function getAll(filters: TransferenciaFilters = {}) {
   if (estado === 'pendiente') where.codigoConfirmacion = null;
   if (estado === 'confirmada') { where.codigoConfirmacion = { not: null }; where.claimedAt = null; }
   if (estado === 'reclamada') where.claimedAt = { not: null };
+  if (estado === 'matched') where.codigoConfirmacion = { not: null };
+  if (matchType) {
+    if (matchType === 'CONFIRMED_MANUAL') {
+      where.matchType = { startsWith: 'CONFIRMED_MANUAL' };
+    } else {
+      where.matchType = matchType;
+    }
+  }
   if (tipo) where.tipo = tipo;
   if (source) where.source = source;
 
