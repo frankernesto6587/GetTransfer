@@ -344,7 +344,7 @@ export function DataTable<T>({
       )}
 
       {/* Pagination */}
-      {pagination && onPageChange && pagination.pages > 1 && (
+      {pagination && onPageChange && (
         <div className="px-4 md:px-5 py-3 border-t border-border">
           <Pagination pagination={pagination} onPageChange={onPageChange} onLimitChange={onLimitChange} />
         </div>

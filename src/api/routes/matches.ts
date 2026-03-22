@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as repo from '../../db/repository';
+import { prisma } from '../../db/repository';
 import { requireRole } from '../middleware/auth';
 
 async function odooFetch(path: string, body: Record<string, unknown>) {
@@ -59,7 +60,32 @@ export async function matchesRoutes(app: FastifyInstance) {
 
     const q = parsed.data;
 
-    // 1. Query local DB for matched transfers
+    // 1. Build base where for stats (same filters, no pagination)
+    const baseWhere: any = { codigoConfirmacion: { not: null } };
+    if (q.fechaDesde || q.fechaHasta) {
+      baseWhere.fecha = {};
+      if (q.fechaDesde) baseWhere.fecha.gte = new Date(q.fechaDesde + 'T00:00:00Z');
+      if (q.fechaHasta) baseWhere.fecha.lte = new Date(q.fechaHasta + 'T23:59:59Z');
+    }
+    if (q.nombre) baseWhere.nombreOrdenante = { contains: q.nombre, mode: 'insensitive' };
+    if (q.ci) baseWhere.ciOrdenante = { contains: q.ci, mode: 'insensitive' };
+    if (q.cuenta) baseWhere.cuentaOrdenante = { contains: q.cuenta, mode: 'insensitive' };
+    if (q.codigo) baseWhere.codigoConfirmacion = { not: null, contains: q.codigo, mode: 'insensitive' };
+    if (q.canal) baseWhere.canalEmision = { contains: q.canal, mode: 'insensitive' };
+    if (q.matchType) {
+      if (q.matchType === 'CONFIRMED_MANUAL') {
+        baseWhere.matchType = { startsWith: 'CONFIRMED_MANUAL' };
+      } else {
+        baseWhere.matchType = q.matchType;
+      }
+    }
+    if (q.desde !== undefined || q.hasta !== undefined) {
+      baseWhere.importe = {};
+      if (q.desde !== undefined) baseWhere.importe.gte = q.desde;
+      if (q.hasta !== undefined) baseWhere.importe.lte = q.hasta;
+    }
+
+    // 2. Query local DB for matched transfers + stats
     const gtResult = await repo.getAll({
       estado: 'matched',
       matchType: q.matchType || undefined,
@@ -78,7 +104,24 @@ export async function matchesRoutes(app: FastifyInstance) {
       orderDir: q.orderDir,
     });
 
-    // 2. Extract GT codes from current page
+    // 2a. Stats by matchType (full dataset, not paginated)
+    const statsRaw = await prisma.transferencia.groupBy({
+      by: ['matchType'],
+      where: baseWhere,
+      _count: { id: true },
+    });
+
+    const statsByType = { auto: 0, manual: 0, deposito: 0, compra: 0, revision: 0 };
+    for (const row of statsRaw) {
+      const mt = row.matchType || '';
+      if (mt === 'CONFIRMED_AUTO') statsByType.auto = row._count.id;
+      else if (mt.startsWith('CONFIRMED_MANUAL')) statsByType.manual += row._count.id;
+      else if (mt === 'CONFIRMED_DEPOSIT') statsByType.deposito = row._count.id;
+      else if (mt === 'CONFIRMED_BUY') statsByType.compra = row._count.id;
+      else if (mt === 'REVIEW_REQUIRED') statsByType.revision = row._count.id;
+    }
+
+    // 2b. Extract GT codes from current page
     const gtCodes = gtResult.data
       .map((t: any) => t.codigoConfirmacion)
       .filter(Boolean) as string[];
@@ -153,6 +196,7 @@ export async function matchesRoutes(app: FastifyInstance) {
       pagination: gtResult.pagination,
       totals: gtResult.totals,
       odooAvailable,
+      statsByType,
     };
   });
 }

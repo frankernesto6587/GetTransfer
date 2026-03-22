@@ -31,6 +31,7 @@ model Transferencia {
 
   codigoConfirmacion  String?   @unique
   confirmedAt         DateTime?
+  confirmedBy         String?
 
   claimedAt           DateTime?
   claimedBy           String?

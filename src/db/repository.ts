@@ -352,7 +352,7 @@ export async function buscarPendientes(params: BuscarPendientesParams) {
 
 export async function confirmarTransferencia(
   id: number,
-  opts?: { matchType?: string; nivelConfianza?: number; prefix?: string }
+  opts?: { matchType?: string; nivelConfianza?: number; prefix?: string; confirmedBy?: string }
 ) {
   const transfer = await prisma.transferencia.findUnique({ where: { id } });
   if (!transfer) throw new Error('Transferencia no encontrada');
@@ -366,6 +366,7 @@ export async function confirmarTransferencia(
     data: {
       codigoConfirmacion: codigo,
       confirmedAt: new Date(),
+      confirmedBy: opts?.confirmedBy || null,
       matchType: opts?.matchType || null,
       nivelConfianza: opts?.nivelConfianza ?? null,
     },
@@ -374,7 +375,8 @@ export async function confirmarTransferencia(
 
 export async function specialAction(
   id: number,
-  action: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED'
+  action: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED',
+  confirmedBy?: string
 ) {
   const transfer = await prisma.transferencia.findUnique({ where: { id } });
   if (!transfer) throw new Error('Transferencia no encontrada');
@@ -389,6 +391,7 @@ export async function specialAction(
     data: {
       codigoConfirmacion: codigo,
       confirmedAt: isReview ? null : new Date(),
+      confirmedBy: confirmedBy || null,
       matchType: action,
     },
   });
@@ -400,6 +403,7 @@ export async function desmacharTransferencia(id: number) {
     data: {
       codigoConfirmacion: null,
       confirmedAt: null,
+      confirmedBy: null,
       claimedAt: null,
       claimedBy: null,
       matchType: null,
@@ -414,6 +418,7 @@ export async function resetAllConfirmaciones() {
     data: {
       codigoConfirmacion: null,
       confirmedAt: null,
+      confirmedBy: null,
       claimedAt: null,
       claimedBy: null,
       searchAttempts: 0,

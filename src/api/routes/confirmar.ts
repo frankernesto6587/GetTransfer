@@ -48,7 +48,7 @@ export async function confirmarRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'ID invalido' });
     }
     try {
-      const result = await repo.confirmarTransferencia(parsed.data.id);
+      const result = await repo.confirmarTransferencia(parsed.data.id, { confirmedBy: request.user?.name });
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';

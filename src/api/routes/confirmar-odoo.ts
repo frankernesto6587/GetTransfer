@@ -172,7 +172,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     // Step 1: Confirm in GT (generates GT code)
     let confirmed;
     try {
-      confirmed = await repo.confirmarTransferencia(parsed.data.id, { matchType, nivelConfianza });
+      confirmed = await repo.confirmarTransferencia(parsed.data.id, { matchType, nivelConfianza, confirmedBy: request.user?.name });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
       return reply.status(409).send({ error: message });
@@ -298,6 +298,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
           const confirmed = await repo.confirmarTransferencia(transfer.id, {
             matchType: 'CONFIRMED_AUTO',
             nivelConfianza: busqueda.nivel_confianza ?? undefined,
+            confirmedBy: request.user?.name,
           });
           const odooResult = await odooFetch('/api/pos/gettransfer/confirmar', {
             payment_id: busqueda.resultado.payment_id,
@@ -379,7 +380,7 @@ export async function confirmarOdooRoutes(app: FastifyInstance) {
     }
 
     try {
-      const updated = await repo.specialAction(parsed.data.id, bodyParsed.data.accion);
+      const updated = await repo.specialAction(parsed.data.id, bodyParsed.data.accion, request.user?.name);
       return updated;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';

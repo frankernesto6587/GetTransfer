@@ -21,6 +21,7 @@ export interface Transferencia {
   createdAt: string
   codigoConfirmacion: string | null
   confirmedAt: string | null
+  confirmedBy: string | null
   claimedAt: string | null
   claimedBy: string | null
   searchAttempts: number
@@ -236,6 +237,7 @@ export interface MatchesResponse {
   pagination: PaginationInfo
   totals?: TotalsInfo
   odooAvailable: boolean
+  statsByType: { auto: number; manual: number; deposito: number; compra: number; revision: number }
 }
 
 // ── Statement Upload types ──

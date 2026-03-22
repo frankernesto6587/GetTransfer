@@ -134,8 +134,8 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               <div className="text-white text-sm font-mono">{match.confirmedAt ? formatDate(match.confirmedAt) : '—'}</div>
             </div>
             <div className="text-center py-3 rounded-xl bg-white/5 border border-border">
-              <div className="text-tertiary text-[10px] uppercase tracking-wider mb-0.5">Orden Odoo</div>
-              <div className="text-white text-sm font-mono">{match.claimedBy || '—'}</div>
+              <div className="text-tertiary text-[10px] uppercase tracking-wider mb-0.5">Confirmado por</div>
+              <div className="text-white text-sm truncate" title={match.confirmedBy || ''}>{match.confirmedBy || '—'}</div>
             </div>
           </div>
 

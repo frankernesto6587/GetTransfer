@@ -108,7 +108,7 @@ export async function confirmarOdooLegacyRoutes(app: FastifyInstance) {
     // Step 1: Confirm in GT (generates GT code)
     let confirmed;
     try {
-      confirmed = await repo.confirmarTransferencia(parsed.data.id);
+      confirmed = await repo.confirmarTransferencia(parsed.data.id, { confirmedBy: request.user?.name });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error desconocido';
       return reply.status(409).send({ error: message });

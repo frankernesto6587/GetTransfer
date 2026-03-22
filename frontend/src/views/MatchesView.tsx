@@ -236,17 +236,8 @@ export function MatchesView() {
 
   const allData = data?.data ?? []
 
-  // Summary stats by match type
-  const statsByType = allData.reduce((acc, t) => {
-    const type = t.matchType || 'unknown'
-    const key = type.startsWith('CONFIRMED_MANUAL') ? 'manual' :
-                type === 'CONFIRMED_AUTO' ? 'auto' :
-                type === 'CONFIRMED_DEPOSIT' ? 'deposito' :
-                type === 'CONFIRMED_BUY' ? 'compra' :
-                type === 'REVIEW_REQUIRED' ? 'revision' : 'otro'
-    acc[key] = (acc[key] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  // Summary stats by match type (from backend — covers full filtered dataset)
+  const statsByType = data?.statsByType ?? { auto: 0, manual: 0, deposito: 0, compra: 0, revision: 0 }
 
   return (
     <div className="p-4 md:p-8">
@@ -365,6 +356,7 @@ export function MatchesView() {
             tableId="matches"
             data={allData}
             columns={makeColumns(setSelected)}
+            onRowClick={setSelected}
             sorting={sorting}
             onSortingChange={(s) => { setSorting(s); setPage(1) }}
             pagination={data?.pagination}
@@ -372,7 +364,11 @@ export function MatchesView() {
             onLimitChange={(l) => { setPageSize('matches', l); setPage(1) }}
             totals={data?.totals}
             alwaysVisibleColumns={['confirmedAt', 'importe', 'codigoConfirmacion']}
-            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['matches'] })}
+            onRefresh={() => {
+              queryClient.invalidateQueries({ queryKey: ['matches'] })
+              queryClient.invalidateQueries({ queryKey: ['confirmar-odoo'] })
+              queryClient.invalidateQueries({ queryKey: ['transferencias'] })
+            }}
             title="Matches"
             loading={isFetching}
             mobileCard={(item) => (
@@ -388,8 +384,8 @@ export function MatchesView() {
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm truncate">{item.nombreOrdenante || '—'}</div>
-                    <div className="text-blue-400/70 text-xs truncate">{item.odoo_card_holder_name || '—'}</div>
+                    <div className="text-white text-sm truncate" title={item.nombreOrdenante || undefined}>{item.nombreOrdenante || '—'}</div>
+                    <div className="text-blue-400/70 text-xs truncate" title={item.odoo_card_holder_name || undefined}>{item.odoo_card_holder_name || '—'}</div>
                   </div>
                   <span className={`font-mono font-medium shrink-0 ${item.tipo === 'Cr' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {item.tipo === 'Cr' ? '+' : '-'}${formatCurrency(item.importe)}
@@ -412,7 +408,11 @@ export function MatchesView() {
         <MatchDetailModal
           match={selected}
           onClose={() => setSelected(null)}
-          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['matches'] })}
+          onRefresh={() => {
+            queryClient.invalidateQueries({ queryKey: ['matches'] })
+            queryClient.invalidateQueries({ queryKey: ['confirmar-odoo'] })
+            queryClient.invalidateQueries({ queryKey: ['transferencias'] })
+          }}
         />
       )}
     </div>
