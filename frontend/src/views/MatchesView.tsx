@@ -374,7 +374,7 @@ export function MatchesView() {
               <a
                 href="/Matches.xlsx"
                 download="Matches.xlsx"
-                className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors ml-auto md:ml-0"
                 title="Descargar plantilla Excel"
               >
                 <Download size={16} />
