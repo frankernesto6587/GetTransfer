@@ -112,7 +112,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
 
         <div className="px-6 py-4 space-y-5">
           {/* Shared data header */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="text-center py-3 rounded-xl bg-gold/10 border border-gold/20 col-span-2 md:col-span-1">
               <div className="text-tertiary text-[10px] uppercase tracking-wider mb-0.5">Monto</div>
               <div className={`font-mono text-xl font-bold ${match.tipo === 'Cr' ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -133,11 +133,15 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               <div className="text-tertiary text-[10px] uppercase tracking-wider mb-0.5">Fecha Match</div>
               <div className="text-white text-sm font-mono">{match.confirmedAt ? formatDate(match.confirmedAt) : '—'}</div>
             </div>
-            <div className="text-center py-3 rounded-xl bg-white/5 border border-border">
-              <div className="text-tertiary text-[10px] uppercase tracking-wider mb-0.5">Confirmado por</div>
-              <div className="text-white text-sm truncate" title={match.confirmedBy || ''}>{match.confirmedBy || '—'}</div>
-            </div>
           </div>
+
+          {/* Confirmed by */}
+          {match.confirmedBy && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-border/40">
+              <span className="text-tertiary text-xs">Confirmado por</span>
+              <span className="text-secondary text-xs font-medium">{match.confirmedBy}</span>
+            </div>
+          )}
 
           {/* Comparison cards */}
           <div>
