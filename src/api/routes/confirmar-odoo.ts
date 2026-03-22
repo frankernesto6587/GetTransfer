@@ -11,11 +11,11 @@ function nivelToManualMatchType(nivel?: number): string {
   const map: Record<number, string> = {
     1: 'CONFIRMED_MANUAL_REF_ACCOUNT_CI',
     2: 'CONFIRMED_MANUAL_CI_ACCOUNT_DATE',
-    3: 'CONFIRMED_MANUAL_CI_AMOUNT',
-    4: 'CONFIRMED_MANUAL_ACCOUNT_AMOUNT',
+    3: 'CONFIRMED_MANUAL_CI',
+    4: 'CONFIRMED_MANUAL_ACCOUNT',
     5: 'CONFIRMED_MANUAL_NAME_DATE',
   };
-  return nivel ? (map[nivel] || 'CONFIRMED_MANUAL_CI_AMOUNT') : 'CONFIRMED_MANUAL_CI_AMOUNT';
+  return nivel ? (map[nivel] || 'CONFIRMED_MANUAL_CI') : 'CONFIRMED_MANUAL_CI';
 }
 
 /** Format Date to YYYY-MM-DD string */
