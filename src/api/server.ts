@@ -19,6 +19,7 @@ import { transferenciasOdooRoutes } from './routes/transferencias-odoo';
 import { matchesRoutes } from './routes/matches';
 import { dashboardRoutes } from './routes/dashboard';
 import { reclamarRoutes } from './routes/reclamar';
+import { exportRoutes } from './routes/export';
 import { tokenRoutes } from './routes/token';
 import { monitorRoutes } from './routes/monitor';
 import { statementRoutes } from './routes/statements';
@@ -87,6 +88,7 @@ async function main() {
   await app.register(matchesRoutes);
   await app.register(dashboardRoutes);
   await app.register(reclamarRoutes);
+  await app.register(exportRoutes);
   await app.register(tokenRoutes);
   await app.register(monitorRoutes);
   await app.register(statementRoutes);

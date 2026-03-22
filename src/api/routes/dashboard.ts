@@ -57,44 +57,27 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const odooMap = new Map<string, any>();
 
     if (gtCodes.length > 0) {
-      const odooPromises = gtCodes.map(code =>
-        odooFetchWithTimeout('/api/pos/gettransfer/transferencias', {
-          page: 1,
-          limit: 1,
-          gt_codigo: code,
-        }).then(r => r?.data?.[0] ? { code, item: r.data[0] } : null)
+      const bulkResult = await odooFetchWithTimeout(
+        '/api/pos/gettransfer/bulk-by-codes',
+        { gt_codigos: gtCodes },
+        15000,
       );
 
-      const results = await Promise.all(odooPromises);
-      for (const r of results) {
-        if (r) {
-          odooAvailable = true;
-          odooMap.set(r.code, r.item);
+      if (bulkResult?.data) {
+        odooAvailable = true;
+        for (const item of bulkResult.data) {
+          if (item.gt_codigo) {
+            odooMap.set(item.gt_codigo, item);
+          }
         }
-      }
 
-      // Fallback: try by transfer_code = refOrigen
-      const unmatched = result.recentMatches.filter((gt: any) =>
-        gt.codigoConfirmacion && !odooMap.has(gt.codigoConfirmacion) && gt.refOrigen
-      );
-
-      if (unmatched.length > 0) {
-        const fallbackPromises = unmatched.map((gt: any) =>
-          odooFetchWithTimeout('/api/pos/gettransfer/transferencias', {
-            page: 1,
-            limit: 1,
-            transfer_code: gt.refOrigen,
-          }).then(r => r?.data?.[0]
-            ? { code: gt.codigoConfirmacion, item: r.data[0] }
-            : null
-          )
-        );
-
-        const fallbackResults = await Promise.all(fallbackPromises);
-        for (const r of fallbackResults) {
-          if (r) {
-            odooAvailable = true;
-            odooMap.set(r.code, r.item);
+        // Fallback: for unmatched, try matching by transfer_code = refOrigen
+        for (const gt of result.recentMatches) {
+          if (gt.codigoConfirmacion && !odooMap.has(gt.codigoConfirmacion) && gt.refOrigen) {
+            const match = bulkResult.data.find((item: any) => item.transfer_code === gt.refOrigen);
+            if (match) {
+              odooMap.set(gt.codigoConfirmacion, match);
+            }
           }
         }
       }
