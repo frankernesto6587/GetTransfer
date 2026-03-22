@@ -74,6 +74,10 @@ jobs:
       - name: Generate Prisma client
         run: pnpm run db:generate
 
+      - name: Apply schema changes
+        if: steps.changes.outputs.backend == 'true'
+        run: pnpm run db:push
+
       - name: Build backend
         if: steps.changes.outputs.backend == 'true'
         run: pnpm run build
