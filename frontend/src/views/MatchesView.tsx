@@ -247,10 +247,10 @@ export function MatchesView() {
           <a
             href="/Matches.xlsx"
             download="Matches.xlsx"
-            className="p-2 rounded-lg text-tertiary hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
-            title="Descargar plantilla Excel"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors"
           >
-            <Download size={16} />
+            <Download size={14} />
+            Plantilla Excel
           </a>
         </div>
         <p className="text-secondary mt-1">
