@@ -143,6 +143,7 @@ export function TransferenciasOdooView() {
   const [transferCode, setTransferCode] = useState('')
   const [canal, setCanal] = useState('')
   const [paymentType, setPaymentType] = useState('')
+  const [matchStatus, setMatchStatus] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const debouncedNombre = useDebouncedValue(nombre)
@@ -178,7 +179,7 @@ export function TransferenciasOdooView() {
   const clearFilters = useCallback(() => {
     setNombre(''); setCi(''); setCuenta(''); setRefOrigen('')
     setGtCodigo(''); setTransferCode(''); setCanal('')
-    setPaymentType(''); setDesde(''); setHasta('')
+    setPaymentType(''); setMatchStatus(''); setDesde(''); setHasta('')
     setPage(1)
   }, [])
 
@@ -209,6 +210,7 @@ export function TransferenciasOdooView() {
       desde: desde ? Number(desde) : undefined,
       hasta: hasta ? Number(hasta) : undefined,
       paymentType: paymentType || undefined,
+      matchStatus: matchStatus || undefined,
       orderBy,
       orderDir,
     }),
@@ -216,7 +218,7 @@ export function TransferenciasOdooView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, desde, hasta].filter(Boolean).length
+  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, matchStatus, desde, hasta].filter(Boolean).length
 
   const pageData = data?.data ?? []
   const pageTotals = pageData.length > 0
@@ -291,6 +293,15 @@ export function TransferenciasOdooView() {
               options={[
                 { value: 'transfer', label: 'Transfer' },
                 { value: 'gettransfer', label: 'GetTransfer' },
+              ]}
+              className="w-full md:w-36"
+            />
+            <FilterSelect
+              value={matchStatus}
+              onChange={(v) => { setMatchStatus(v); setPage(1) }}
+              options={[
+                { value: 'pending', label: 'Pendientes' },
+                { value: 'matched', label: 'Matcheados' },
               ]}
               className="w-full md:w-36"
             />

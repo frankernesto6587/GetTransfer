@@ -371,6 +371,7 @@ export interface TransferenciasOdooParams {
   desde?: number
   hasta?: number
   paymentType?: string
+  matchStatus?: string
   orderBy?: string
   orderDir?: 'asc' | 'desc'
 }
@@ -391,6 +392,7 @@ export function buildTransferenciasOdooUrl(params: TransferenciasOdooParams): st
   if (params.desde) sp.set('desde', String(params.desde))
   if (params.hasta) sp.set('hasta', String(params.hasta))
   if (params.paymentType) sp.set('paymentType', params.paymentType)
+  if (params.matchStatus) sp.set('matchStatus', params.matchStatus)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
   if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
