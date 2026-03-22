@@ -88,28 +88,46 @@ export async function matchesRoutes(app: FastifyInstance) {
     const odooMap = new Map<string, any>();
 
     if (gtCodes.length > 0) {
-      // Fetch Odoo payments individually by gt_codigo for each GT code on this page
-      // Use parallel requests with timeout for performance
+      // Round 1: Fetch Odoo payments by gt_codigo
       const odooPromises = gtCodes.map(code =>
         odooFetchWithTimeout('/api/pos/gettransfer/transferencias', {
           page: 1,
           limit: 1,
           gt_codigo: code,
-        }).then(result => {
-          if (result?.data?.[0]) {
-            return { code, item: result.data[0] };
-          }
-          return null;
-        })
+        }).then(result => result?.data?.[0] ? { code, item: result.data[0] } : null)
       );
 
       const results = await Promise.all(odooPromises);
-      const anySuccess = results.some(r => r !== null);
+      for (const r of results) {
+        if (r) {
+          odooAvailable = true;
+          odooMap.set(r.code, r.item);
+        }
+      }
 
-      if (anySuccess) {
-        odooAvailable = true;
-        for (const r of results) {
-          if (r) odooMap.set(r.code, r.item);
+      // Round 2: For unmatched GTs, try by transfer_code = refOrigen
+      const unmatchedGts = gtResult.data.filter((gt: any) =>
+        gt.codigoConfirmacion && !odooMap.has(gt.codigoConfirmacion) && gt.refOrigen
+      );
+
+      if (unmatchedGts.length > 0) {
+        const fallbackPromises = unmatchedGts.map((gt: any) =>
+          odooFetchWithTimeout('/api/pos/gettransfer/transferencias', {
+            page: 1,
+            limit: 1,
+            transfer_code: gt.refOrigen,
+          }).then(result => result?.data?.[0]
+            ? { code: gt.codigoConfirmacion, item: result.data[0] }
+            : null
+          )
+        );
+
+        const fallbackResults = await Promise.all(fallbackPromises);
+        for (const r of fallbackResults) {
+          if (r) {
+            odooAvailable = true;
+            odooMap.set(r.code, r.item);
+          }
         }
       }
     }
