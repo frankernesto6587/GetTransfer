@@ -151,20 +151,30 @@ async function scrapeDayOnePass(page: Page, dateStr: string, checkboxId: '#credi
 export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEntrada[]> {
   const dateStr = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 
-  try {
-    const formSubmit = await page.$('button[type="submit"]');
-    if (!formSubmit) {
-      const ok = await navigateToOperaciones(page);
-      if (!ok) return [];
-    }
-
-    const creditos = await scrapeDayOnePass(page, dateStr, '#creditos');
-    const debitos = await scrapeDayOnePass(page, dateStr, '#debitos');
-    return [...creditos, ...debitos];
-  } catch (err: any) {
-    console.error(`scrapeDay error (${dateStr}): ${err.message?.substring(0, 80)}`);
-    return [];
+  const formSubmit = await page.$('button[type="submit"]');
+  if (!formSubmit) {
+    const ok = await navigateToOperaciones(page);
+    if (!ok) return [];
   }
+
+  let creditos: TransferenciaEntrada[] = [];
+  try {
+    creditos = await scrapeDayOnePass(page, dateStr, '#creditos');
+  } catch (err: any) {
+    console.error(`scrapeDay creditos error (${dateStr}): ${err.message?.substring(0, 80)}`);
+  }
+
+  let debitos: TransferenciaEntrada[] = [];
+  try {
+    const ok = await navigateToOperaciones(page);
+    if (ok) {
+      debitos = await scrapeDayOnePass(page, dateStr, '#debitos');
+    }
+  } catch (err: any) {
+    console.error(`scrapeDay debitos error (${dateStr}): ${err.message?.substring(0, 80)}`);
+  }
+
+  return [...creditos, ...debitos];
 }
 
 export async function scrapeMonth(page: Page, month: number, year: number): Promise<TransferenciaEntrada[]> {

@@ -165,11 +165,22 @@ async function main() {
 
     async function scrapeDayTwoPasses(dateStr: string, d: number): Promise<TransferenciaEntrada[]> {
       const results: TransferenciaEntrada[] = [];
-      for (const checkboxId of ['#creditos', '#debitos'] as const) {
-        await fillAndSubmitForm(page, dateStr, checkboxId);
-        const rows = await extractRows(page);
-        results.push(...parseRows(rows));
-      }
+
+      // Primer pase: créditos
+      await fillAndSubmitForm(page, dateStr, '#creditos');
+      const creditRows = await extractRows(page);
+      results.push(...parseRows(creditRows));
+
+      // Navegar de vuelta al formulario para el segundo pase
+      await page.click('a:has-text("Operaciones Diarias")');
+      await page.waitForTimeout(1500);
+      await page.waitForLoadState('networkidle').catch(() => {});
+
+      // Segundo pase: débitos
+      await fillAndSubmitForm(page, dateStr, '#debitos');
+      const debitRows = await extractRows(page);
+      results.push(...parseRows(debitRows));
+
       return results;
     }
 
