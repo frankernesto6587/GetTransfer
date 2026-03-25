@@ -16,6 +16,9 @@ import { UsuariosView } from './views/UsuariosView'
 import { AyudaView } from './views/AyudaView'
 import { StatementsView } from './views/StatementsView'
 import { MatchesView } from './views/MatchesView'
+import { SolicitudesView } from './views/SolicitudesView'
+import { ConciliarView } from './views/ConciliarView'
+import { SyncDashboardView } from './views/SyncDashboardView'
 
 // ── Root route ──
 const rootRoute = createRootRoute({
@@ -118,6 +121,24 @@ const matchesRoute = createRoute({
   component: MatchesView,
 })
 
+const solicitudesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/solicitudes',
+  component: SolicitudesView,
+})
+
+const conciliarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/conciliar',
+  component: ConciliarView,
+})
+
+const syncDashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sync',
+  component: SyncDashboardView,
+})
+
 const ayudaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ayuda',
@@ -135,6 +156,9 @@ const routeTree = rootRoute.addChildren([
   reportesRoute,
   statementsRoute,
   matchesRoute,
+  solicitudesRoute,
+  conciliarRoute,
+  syncDashboardRoute,
   configRoute,
   usuariosRoute,
   ayudaRoute,

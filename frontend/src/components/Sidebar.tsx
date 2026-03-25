@@ -12,6 +12,9 @@ import {
   Clock,
   FileUp,
   GitMerge,
+  FileText,
+  Scale,
+  RefreshCw,
 } from 'lucide-react'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,6 +33,9 @@ const navItems: NavItem[] = [
   { icon: Database, label: 'Transferencias Odoo', to: '/transferencias-odoo', requireConfirm: true },
   { icon: GitMerge, label: 'Tabla Matches', to: '/matches', requireConfirm: true },
   { icon: LinkIcon, label: 'Confirmar Odoo', to: '/confirmar-odoo', requireConfirm: true },
+  { icon: FileText, label: 'Solicitudes GT', to: '/solicitudes', requireConfirm: true },
+  { icon: Scale, label: 'Conciliar', to: '/conciliar', requireConfirm: true },
+  { icon: RefreshCw, label: 'Sync Sedes', to: '/sync', requireAdmin: true },
   { icon: FileUp, label: 'Estados de Cuenta', to: '/estados-cuenta', requireAdmin: true },
   { icon: KeyRound, label: 'GetCode', to: '/getcode', requireConfirm: true },
   { icon: Clock, label: 'Odoo Legacy', to: '/confirmar-odoo-legacy', requireConfirm: true },

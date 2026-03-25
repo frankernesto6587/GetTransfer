@@ -23,6 +23,8 @@ import { exportRoutes } from './routes/export';
 import { tokenRoutes } from './routes/token';
 import { monitorRoutes } from './routes/monitor';
 import { statementRoutes } from './routes/statements';
+import { syncRoutes } from './routes/sync';
+import { conciliarRoutes } from './routes/conciliar';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
 import { jwtAuth } from './middleware/auth';
@@ -92,6 +94,8 @@ async function main() {
   await app.register(tokenRoutes);
   await app.register(monitorRoutes);
   await app.register(statementRoutes);
+  await app.register(syncRoutes);
+  await app.register(conciliarRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 

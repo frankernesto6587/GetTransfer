@@ -40,6 +40,8 @@ model Transferencia {
   matchType           String?
   nivelConfianza      Int?
 
+  solicitud           Solicitud?
+
   @@unique([refCorriente, refOrigen, importe, fecha, tipo])
   @@index([fecha])
   @@index([nombreOrdenante])
@@ -111,6 +113,96 @@ model StatementUpload {
 
   uploadedBy      Int
   user            User     @relation(fields: [uploadedBy], references: [id])
+}
+
+// ── Solicitudes GT (sistema distribuido offline-first) ──
+
+model Solicitud {
+  id                Int       @id @default(autoincrement())
+  codigo            String    @unique
+  sedeId            String
+  version           Int       @default(1)
+
+  // Cliente
+  clienteNombre     String
+  clienteCi         String
+  clienteCuenta     String
+  clienteTelefono   String?
+  odooPartnerId     Int?
+
+  // Transferencia (SMS)
+  monto             Decimal   @db.Decimal(16, 2)
+  canalEmision      String?
+  transferCode      String?
+  notas             String?
+  fingerprint       String?
+
+  // Estados separados
+  workflowStatus    String    @default("pending")   // pending | claimed | cancelled
+  reconStatus       String    @default("unmatched")  // unmatched | suggested | matched
+
+  // Creación
+  creadoAt          DateTime
+  creadoPor         String
+
+  // Reclamación
+  reclamadaAt       DateTime?
+  reclamadaPor      String?
+
+  // Conciliación con banco
+  transferenciaId   Int?      @unique
+  transferencia     Transferencia? @relation(fields: [transferenciaId], references: [id])
+  conciliadaAt      DateTime?
+  conciliadaPor     String?
+  matchNivel        Int?
+
+  // Anulación
+  anuladaAt         DateTime?
+  anuladaPor        String?
+  motivoAnulacion   String?
+
+  // Cross-sede duplicate detection
+  crossDupOf        String?
+
+  // Sync
+  syncReceivedAt    DateTime  @default(now())
+  lastEventId       String?
+
+  @@index([workflowStatus])
+  @@index([reconStatus])
+  @@index([workflowStatus, reconStatus])
+  @@index([sedeId])
+  @@index([sedeId, creadoAt])
+  @@index([clienteCi])
+  @@index([clienteCuenta])
+  @@index([monto])
+  @@index([fingerprint])
+}
+
+model SolicitudEvent {
+  id              Int       @id @default(autoincrement())
+  eventId         String    @unique
+  solicitudCodigo String
+  eventType       String    // CREATED | CLAIMED | ANNULLED
+  payload         Json
+  payloadHash     String?   // SHA256 truncado para integridad
+  sedeId          String
+  createdAt       DateTime
+  receivedAt      DateTime  @default(now())
+
+  @@index([solicitudCodigo])
+  @@index([sedeId, createdAt])
+}
+
+model SolicitudSnapshot {
+  id              Int       @id @default(autoincrement())
+  solicitudCodigo String
+  snapshotAt      DateTime  @default(now())
+  version         Int
+  state           Json
+  lastEventId     String
+
+  @@index([solicitudCodigo])
 }
 
 model Invitation {

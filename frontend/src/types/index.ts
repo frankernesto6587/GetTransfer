@@ -278,6 +278,67 @@ export interface StatementUploadsResponse {
   pagination: PaginationInfo
 }
 
+// ── Solicitudes GT ──
+
+export interface Solicitud {
+  id: number
+  codigo: string
+  sedeId: string
+  version: number
+  clienteNombre: string
+  clienteCi: string
+  clienteCuenta: string
+  clienteTelefono: string | null
+  monto: number | string
+  canalEmision: string | null
+  transferCode: string | null
+  notas: string | null
+  fingerprint: string | null
+  workflowStatus: 'pending' | 'claimed' | 'cancelled'
+  reconStatus: 'unmatched' | 'suggested' | 'matched'
+  creadoAt: string
+  creadoPor: string
+  reclamadaAt: string | null
+  reclamadaPor: string | null
+  transferenciaId: number | null
+  conciliadaAt: string | null
+  conciliadaPor: string | null
+  matchNivel: number | null
+  anuladaAt: string | null
+  crossDupOf: string | null
+  syncReceivedAt: string
+}
+
+export interface SolicitudesResponse {
+  data: Solicitud[]
+  pagination: PaginationInfo
+}
+
+export interface ConciliarCandidate {
+  id: number
+  fecha: string
+  refOrigen: string
+  refCorriente: string
+  importe: number
+  nombreOrdenante: string
+  ciOrdenante: string
+  cuentaOrdenante: string
+  canalEmision: string
+  nivel: number
+}
+
+export interface ConciliarBuscarResponse {
+  solicitud: Solicitud
+  autoMatch: ConciliarCandidate | null
+  candidates: ConciliarCandidate[]
+}
+
+export interface SyncMetrics {
+  solicitudes: { workflowStatus: string; reconStatus: string; _count: number }[]
+  events: { sedeId: string; _count: number; _max: { receivedAt: string | null } }[]
+  bySede: { sedeId: string; workflowStatus: string; _count: number; _sum: { monto: number | null } }[]
+}
+
 // ── Dashboard ──
 
 export interface DashboardDailySeries {

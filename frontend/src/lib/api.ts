@@ -1,4 +1,4 @@
-import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, MatchesResponse, DashboardResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse } from '../types'
+import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse, MatchesResponse, DashboardResponse, Resumen, ApiToken, MonitorConfig, BankStatus, ScrapeResult, WebhookInfo, User, Invitation, OdooMatchResponse, OdooLegacyMatchResponse, AutoConfirmarResult, OdooConfig, PaginationInfo, TotalsInfo, StatementUploadResult, StatementUploadsResponse, SolicitudesResponse, ConciliarBuscarResponse, SyncMetrics } from '../types'
 
 // ── Base fetch helper with credentials + 401 handling ──
 
@@ -640,4 +640,89 @@ export async function getStatementUploads(page = 1, limit = 20): Promise<Stateme
 export const statementUploadsQuery = (page = 1) => ({
   queryKey: ['statement-uploads', page] as const,
   queryFn: () => getStatementUploads(page),
+})
+
+// ── Solicitudes GT ──
+
+export interface SolicitudesParams {
+  page?: number
+  limit?: number
+  sedeId?: string
+  clienteCi?: string
+  clienteCuenta?: string
+  clienteNombre?: string
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+export function buildSolicitudesUrl(params: SolicitudesParams): string {
+  const sp = new URLSearchParams()
+  if (params.page) sp.set('page', String(params.page))
+  if (params.limit) sp.set('limit', String(params.limit))
+  if (params.sedeId) sp.set('sedeId', params.sedeId)
+  if (params.clienteCi) sp.set('clienteCi', params.clienteCi)
+  if (params.clienteCuenta) sp.set('clienteCuenta', params.clienteCuenta)
+  if (params.clienteNombre) sp.set('clienteNombre', params.clienteNombre)
+  if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
+  if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
+  const qs = sp.toString()
+  return `/api/conciliar/pendientes${qs ? `?${qs}` : ''}`
+}
+
+export const solicitudesQuery = (params: SolicitudesParams) => {
+  const url = buildSolicitudesUrl(params)
+  return {
+    queryKey: ['solicitudes', params] as const,
+    queryFn: () => fetcher<SolicitudesResponse>(url),
+  }
+}
+
+export async function buscarConciliacion(solicitudId: number): Promise<ConciliarBuscarResponse> {
+  const res = await apiFetch(`/api/conciliar/${solicitudId}/buscar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function confirmarConciliacion(solicitudId: number, transferenciaId: number, matchNivel?: number): Promise<any> {
+  const res = await apiFetch(`/api/conciliar/${solicitudId}/confirmar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transferenciaId, matchNivel }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function deshacerConciliacion(solicitudId: number): Promise<void> {
+  const res = await apiFetch(`/api/conciliar/${solicitudId}/deshacer`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+}
+
+export async function autoConciliar(): Promise<any> {
+  const res = await apiFetch('/api/conciliar/auto', { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function getSyncMetrics(): Promise<SyncMetrics> {
+  const res = await apiFetch('/api/sync/metrics')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export const syncMetricsQuery = () => ({
+  queryKey: ['sync-metrics'] as const,
+  queryFn: () => getSyncMetrics(),
 })
