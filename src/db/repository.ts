@@ -512,8 +512,12 @@ export async function getActiveToken() {
 }
 
 export async function verifyToken(token: string) {
-  const found = await prisma.apiToken.findFirst({ where: { token, active: true } });
-  return !!found;
+  // Check ApiToken (legacy) and Sede token
+  const [apiToken, sede] = await Promise.all([
+    prisma.apiToken.findFirst({ where: { token, active: true } }),
+    prisma.sede.findFirst({ where: { token, active: true } }),
+  ]);
+  return !!(apiToken || sede);
 }
 
 export async function generateToken(name: string = '') {

@@ -8,7 +8,19 @@ import { Prisma } from '@prisma/client';
 
 const idSchema = z.object({ id: z.coerce.number().int().min(1) });
 
-const querySchema = z.object({
+const bancoQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
+  nombre: z.string().optional(),
+  ci: z.string().optional(),
+  cuenta: z.string().optional(),
+  canal: z.string().optional(),
+  fechaDesde: z.string().optional(),
+  fechaHasta: z.string().optional(),
+  estado: z.string().optional(), // pendiente | revision | todos
+});
+
+const solicitudesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   sedeId: z.string().optional(),
@@ -20,73 +32,83 @@ const querySchema = z.object({
 });
 
 const confirmarSchema = z.object({
-  transferenciaId: z.number().int().min(1),
+  solicitudId: z.number().int().min(1),
   matchNivel: z.number().int().min(1).max(5).optional(),
 });
 
-// ── Match levels ──
-// 1: monto exacto + transferCode + cuenta + CI → AUTO
-// 2: monto exacto + cuenta + CI (sin transferCode) → manual
-// 3: monto exacto + CI → manual
-// 4: monto exacto + cuenta → manual
-// 5: monto exacto + nombre similar → manual
+const accionSchema = z.object({
+  accion: z.enum(['CONFIRMED_DEPOSIT', 'CONFIRMED_BUY', 'REVIEW_REQUIRED']),
+});
 
-interface MatchCandidate {
+// ── Match: Transferencia → Solicitud ──
+// Niveles manuales (auto-conciliar ocurre en sync, no aquí):
+// 1: monto exacto + refOrigen↔transferCode
+// 2: monto exacto + cuenta + CI
+// 3: monto exacto + CI
+// 4: monto exacto + cuenta
+// 5: monto exacto + nombre similar ≥50%
+
+interface SolicitudCandidate {
   id: number;
-  fecha: Date;
-  refOrigen: string;
-  refCorriente: string;
-  importe: number;
-  nombreOrdenante: string;
-  ciOrdenante: string;
-  cuentaOrdenante: string;
-  canalEmision: string;
+  codigo: string;
+  sedeId: string;
+  clienteNombre: string;
+  clienteCi: string;
+  clienteCuenta: string;
+  monto: any;
+  canalEmision: string | null;
+  transferCode: string | null;
+  workflowStatus: string;
+  reconStatus: string;
+  creadoAt: Date;
+  reclamadaPor: string | null;
   nivel: number;
 }
 
-function findMatches(
-  transferencias: any[],
-  solicitud: { monto: number; transferCode: string | null; clienteCuenta: string; clienteCi: string; clienteNombre: string },
-): MatchCandidate[] {
-  const candidates: MatchCandidate[] = [];
-  const montoSol = Number(solicitud.monto);
+function findSolicitudMatches(
+  solicitudes: any[],
+  transfer: { importe: number; refOrigen: string; cuentaOrdenante: string; ciOrdenante: string; nombreOrdenante: string },
+): SolicitudCandidate[] {
+  const candidates: SolicitudCandidate[] = [];
 
-  for (const t of transferencias) {
-    const montoExacto = t.importe === montoSol;
+  for (const sol of solicitudes) {
+    const montoExacto = Number(sol.monto) === transfer.importe;
     if (!montoExacto) continue;
 
-    const codeMatch = solicitud.transferCode && t.refOrigen === solicitud.transferCode;
-    const cuentaMatch = solicitud.clienteCuenta && t.cuentaOrdenante === solicitud.clienteCuenta;
-    const ciMatch = solicitud.clienteCi && t.ciOrdenante === solicitud.clienteCi;
+    const codeMatch = transfer.refOrigen && sol.transferCode && transfer.refOrigen === sol.transferCode;
+    const cuentaMatch = transfer.cuentaOrdenante && sol.clienteCuenta && transfer.cuentaOrdenante === sol.clienteCuenta;
+    const ciMatch = transfer.ciOrdenante && sol.clienteCi && transfer.ciOrdenante === sol.clienteCi;
 
     let nivel = 0;
-    if (codeMatch && cuentaMatch && ciMatch) nivel = 1;
+    if (codeMatch) nivel = 1;
     else if (cuentaMatch && ciMatch) nivel = 2;
     else if (ciMatch) nivel = 3;
     else if (cuentaMatch) nivel = 4;
     else {
-      // Nivel 5: nombre similar (>= 50%)
-      const sim = nameSimilarity(solicitud.clienteNombre, t.nombreOrdenante);
+      const sim = nameSimilarity(transfer.nombreOrdenante, sol.clienteNombre);
       if (sim >= 50) nivel = 5;
     }
 
     if (nivel > 0) {
       candidates.push({
-        id: t.id,
-        fecha: t.fecha,
-        refOrigen: t.refOrigen,
-        refCorriente: t.refCorriente,
-        importe: t.importe,
-        nombreOrdenante: t.nombreOrdenante,
-        ciOrdenante: t.ciOrdenante,
-        cuentaOrdenante: t.cuentaOrdenante,
-        canalEmision: t.canalEmision,
+        id: sol.id,
+        codigo: sol.codigo,
+        sedeId: sol.sedeId,
+        clienteNombre: sol.clienteNombre,
+        clienteCi: sol.clienteCi,
+        clienteCuenta: sol.clienteCuenta,
+        monto: sol.monto,
+        canalEmision: sol.canalEmision,
+        transferCode: sol.transferCode,
+        workflowStatus: sol.workflowStatus,
+        reconStatus: sol.reconStatus,
+        creadoAt: sol.creadoAt,
+        reclamadaPor: sol.reclamadaPor,
         nivel,
       });
     }
   }
 
-  // Sort: best match first
   candidates.sort((a, b) => a.nivel - b.nivel);
   return candidates;
 }
@@ -106,7 +128,6 @@ function nameSimilarity(a: string, b: string): number {
   for (const ta of tokensA) {
     for (const tb of tokensB) {
       if (ta === tb) { matched++; break; }
-      // Prefix match (truncated names)
       if (ta.length >= 2 && tb.startsWith(ta)) { matched += 0.8; break; }
       if (tb.length >= 2 && ta.startsWith(tb)) { matched += 0.8; break; }
     }
@@ -119,15 +140,11 @@ function nameSimilarity(a: string, b: string): number {
 export async function conciliarRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('admin', 'confirmer'));
 
-  // ── List solicitudes pending reconciliation ──
-  app.get('/api/conciliar/pendientes', async (request) => {
-    const q = querySchema.parse(request.query);
+  // ── List ALL solicitudes (for SolicitudesView) ──
+  app.get('/api/solicitudes', async (request) => {
+    const q = solicitudesQuerySchema.parse(request.query);
 
-    const where: Prisma.SolicitudWhereInput = {
-      workflowStatus: 'claimed',
-      reconStatus: { in: ['unmatched', 'suggested'] },
-    };
-
+    const where: Prisma.SolicitudWhereInput = {};
     if (q.sedeId) where.sedeId = q.sedeId;
     if (q.clienteCi) where.clienteCi = { contains: q.clienteCi, mode: 'insensitive' };
     if (q.clienteCuenta) where.clienteCuenta = { contains: q.clienteCuenta, mode: 'insensitive' };
@@ -150,96 +167,115 @@ export async function conciliarRoutes(app: FastifyInstance) {
 
     return {
       data,
-      pagination: {
-        page: q.page,
-        limit: q.limit,
-        total,
-        pages: Math.ceil(total / q.limit),
+      pagination: { page: q.page, limit: q.limit, total, pages: Math.ceil(total / q.limit) },
+    };
+  });
+
+  // ── List bank transfers without solicitud (pendientes de conciliar) ──
+  app.get('/api/conciliar/pendientes', async (request) => {
+    const q = bancoQuerySchema.parse(request.query);
+
+    const where: Prisma.TransferenciaWhereInput = {
+      solicitud: { is: null },
+      tipo: 'Cr',
+    };
+
+    if (q.nombre) where.nombreOrdenante = { contains: q.nombre, mode: 'insensitive' };
+    if (q.ci) where.ciOrdenante = { contains: q.ci, mode: 'insensitive' };
+    if (q.cuenta) where.cuentaOrdenante = { contains: q.cuenta, mode: 'insensitive' };
+    if (q.canal) where.canalEmision = { contains: q.canal, mode: 'insensitive' };
+    if (q.fechaDesde || q.fechaHasta) {
+      where.fecha = {};
+      if (q.fechaDesde) (where.fecha as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');
+      if (q.fechaHasta) (where.fecha as any).lte = new Date(q.fechaHasta + 'T23:59:59Z');
+    }
+
+    const [data, total, aggregates] = await Promise.all([
+      prisma.transferencia.findMany({
+        where,
+        orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+      }),
+      prisma.transferencia.count({ where }),
+      prisma.transferencia.aggregate({
+        where,
+        _sum: { importe: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    return {
+      data,
+      pagination: { page: q.page, limit: q.limit, total, pages: Math.ceil(total / q.limit) },
+      totals: {
+        importe: aggregates._sum.importe ?? 0,
+        cantidad: aggregates._count.id,
       },
     };
   });
 
-  // ── Search bank transfers that match a solicitud ──
+  // ── Search solicitudes that match a bank transfer ──
   app.post('/api/conciliar/:id/buscar', async (request, reply) => {
     const { id } = idSchema.parse(request.params);
 
-    const solicitud = await prisma.solicitud.findUnique({ where: { id } });
-    if (!solicitud) return reply.status(404).send({ error: 'Solicitud no encontrada' });
-    if (solicitud.reconStatus === 'matched') {
-      return reply.status(409).send({ error: 'Solicitud ya conciliada' });
-    }
-
-    // Search unmatched transfers (no solicitud linked, no codigoConfirmacion from old flow)
-    const montoNum = Number(solicitud.monto);
-    const transferencias = await prisma.transferencia.findMany({
-      where: {
-        solicitud: { is: null },
-        tipo: 'Cr', // Only credits
-        importe: montoNum,
-      },
-      orderBy: { fecha: 'desc' },
-      take: 50,
-    });
-
-    const candidates = findMatches(transferencias, {
-      monto: montoNum,
-      transferCode: solicitud.transferCode,
-      clienteCuenta: solicitud.clienteCuenta,
-      clienteCi: solicitud.clienteCi,
-      clienteNombre: solicitud.clienteNombre,
-    });
-
-    // Auto-match: only nivel 1 (all 4 fields exact)
-    const autoMatch = candidates.length === 1 && candidates[0].nivel === 1
-      ? candidates[0]
-      : null;
-
-    // Update reconStatus if we found candidates
-    if (candidates.length > 0 && solicitud.reconStatus === 'unmatched') {
-      await prisma.solicitud.update({
-        where: { id },
-        data: { reconStatus: 'suggested' },
-      });
-    }
-
-    return {
-      solicitud,
-      autoMatch,
-      candidates,
-    };
-  });
-
-  // ── Confirm match: link solicitud to bank transfer ──
-  app.post('/api/conciliar/:id/confirmar', async (request, reply) => {
-    const { id } = idSchema.parse(request.params);
-    const body = confirmarSchema.parse(request.body);
-
-    const solicitud = await prisma.solicitud.findUnique({ where: { id } });
-    if (!solicitud) return reply.status(404).send({ error: 'Solicitud no encontrada' });
-    if (solicitud.reconStatus === 'matched') {
-      return reply.status(409).send({ error: 'Solicitud ya conciliada' });
-    }
-    if (solicitud.workflowStatus === 'cancelled') {
-      return reply.status(409).send({ error: 'Solicitud anulada' });
-    }
-
-    // Verify transfer exists and is unlinked
     const transfer = await prisma.transferencia.findUnique({
-      where: { id: body.transferenciaId },
+      where: { id },
       include: { solicitud: true },
     });
     if (!transfer) return reply.status(404).send({ error: 'Transferencia no encontrada' });
     if (transfer.solicitud) {
-      return reply.status(409).send({ error: `Transferencia ya conciliada con solicitud ${transfer.solicitud.codigo}` });
+      return reply.status(409).send({ error: `Ya conciliada con solicitud ${transfer.solicitud.codigo}` });
+    }
+
+    // Search unmatched solicitudes (claimed but not yet reconciled)
+    const solicitudes = await prisma.solicitud.findMany({
+      where: {
+        reconStatus: { in: ['unmatched', 'suggested'] },
+        workflowStatus: { not: 'cancelled' },
+      },
+      orderBy: { creadoAt: 'desc' },
+      take: 100,
+    });
+
+    const candidates = findSolicitudMatches(solicitudes, {
+      importe: transfer.importe,
+      refOrigen: transfer.refOrigen,
+      cuentaOrdenante: transfer.cuentaOrdenante,
+      ciOrdenante: transfer.ciOrdenante,
+      nombreOrdenante: transfer.nombreOrdenante,
+    });
+
+    return {
+      transfer,
+      candidates,
+    };
+  });
+
+  // ── Confirm: link bank transfer to solicitud ──
+  app.post('/api/conciliar/:id/confirmar', async (request, reply) => {
+    const { id } = idSchema.parse(request.params); // transferencia ID
+    const body = confirmarSchema.parse(request.body);
+
+    const transfer = await prisma.transferencia.findUnique({
+      where: { id },
+      include: { solicitud: true },
+    });
+    if (!transfer) return reply.status(404).send({ error: 'Transferencia no encontrada' });
+    if (transfer.solicitud) {
+      return reply.status(409).send({ error: `Ya conciliada con solicitud ${transfer.solicitud.codigo}` });
+    }
+
+    const solicitud = await prisma.solicitud.findUnique({ where: { id: body.solicitudId } });
+    if (!solicitud) return reply.status(404).send({ error: 'Solicitud no encontrada' });
+    if (solicitud.reconStatus === 'matched') {
+      return reply.status(409).send({ error: `Solicitud ${solicitud.codigo} ya está conciliada` });
     }
 
     const user = (request as any).user;
 
-    // Link solicitud ↔ transferencia
     const updated = await prisma.solicitud.update({
-      where: { id },
+      where: { id: body.solicitudId },
       data: {
-        transferenciaId: body.transferenciaId,
+        transferenciaId: id,
         reconStatus: 'matched',
         conciliadaAt: new Date(),
         conciliadaPor: user?.name || 'system',
@@ -248,21 +284,35 @@ export async function conciliarRoutes(app: FastifyInstance) {
       include: { transferencia: true },
     });
 
-    return { solicitud: updated };
+    return { solicitud: updated, transfer };
   });
 
-  // ── Undo reconciliation ──
-  app.post('/api/conciliar/:id/deshacer', async (request, reply) => {
+  // ── Special action on bank transfer (deposit, buy, review) ──
+  app.post('/api/conciliar/:id/accion', async (request, reply) => {
     const { id } = idSchema.parse(request.params);
+    const { accion } = accionSchema.parse(request.body);
 
-    const solicitud = await prisma.solicitud.findUnique({ where: { id } });
-    if (!solicitud) return reply.status(404).send({ error: 'Solicitud no encontrada' });
+    // Import the specialAction from repository
+    const { specialAction } = await import('../../db/repository');
+    const user = (request as any).user;
+    const result = await specialAction(id, accion, user?.name);
+    return result;
+  });
+
+  // ── Undo reconciliation (by transferencia ID) ──
+  app.post('/api/conciliar/:id/deshacer', async (request, reply) => {
+    const { id } = idSchema.parse(request.params); // transferencia ID
+
+    const solicitud = await prisma.solicitud.findFirst({
+      where: { transferenciaId: id },
+    });
+    if (!solicitud) return reply.status(404).send({ error: 'No hay solicitud vinculada a esta transferencia' });
     if (solicitud.reconStatus !== 'matched') {
       return reply.status(409).send({ error: 'Solicitud no está conciliada' });
     }
 
     await prisma.solicitud.update({
-      where: { id },
+      where: { id: solicitud.id },
       data: {
         transferenciaId: null,
         reconStatus: 'unmatched',
@@ -273,70 +323,5 @@ export async function conciliarRoutes(app: FastifyInstance) {
     });
 
     return { success: true };
-  });
-
-  // ── Auto-conciliar batch ──
-  app.post('/api/conciliar/auto', async (request) => {
-    const solicitudes = await prisma.solicitud.findMany({
-      where: {
-        workflowStatus: 'claimed',
-        reconStatus: { in: ['unmatched', 'suggested'] },
-      },
-      orderBy: { creadoAt: 'asc' },
-      take: 100,
-    });
-
-    let matched = 0;
-    let noMatch = 0;
-    let errors = 0;
-    const detalle: { codigo: string; resultado: string; transferId?: number }[] = [];
-
-    for (const sol of solicitudes) {
-      try {
-        const montoNum = Number(sol.monto);
-        // Strict auto-match: all 4 fields exact
-        const autoMatch = sol.transferCode
-          ? await prisma.transferencia.findFirst({
-              where: {
-                solicitud: { is: null },
-                tipo: 'Cr',
-                importe: montoNum,
-                refOrigen: sol.transferCode,
-                cuentaOrdenante: sol.clienteCuenta,
-                ciOrdenante: sol.clienteCi,
-              },
-            })
-          : null;
-
-        if (autoMatch) {
-          await prisma.solicitud.update({
-            where: { id: sol.id },
-            data: {
-              transferenciaId: autoMatch.id,
-              reconStatus: 'matched',
-              conciliadaAt: new Date(),
-              conciliadaPor: 'auto',
-              matchNivel: 1,
-            },
-          });
-          matched++;
-          detalle.push({ codigo: sol.codigo, resultado: 'matched', transferId: autoMatch.id });
-        } else {
-          noMatch++;
-          detalle.push({ codigo: sol.codigo, resultado: 'no_match' });
-        }
-      } catch (err: any) {
-        errors++;
-        detalle.push({ codigo: sol.codigo, resultado: 'error' });
-      }
-    }
-
-    return {
-      total: solicitudes.length,
-      matched,
-      noMatch,
-      errors,
-      detalle,
-    };
   });
 }

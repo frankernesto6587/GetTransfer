@@ -314,23 +314,26 @@ export interface SolicitudesResponse {
   pagination: PaginationInfo
 }
 
-export interface ConciliarCandidate {
+export interface SolicitudCandidate {
   id: number
-  fecha: string
-  refOrigen: string
-  refCorriente: string
-  importe: number
-  nombreOrdenante: string
-  ciOrdenante: string
-  cuentaOrdenante: string
-  canalEmision: string
+  codigo: string
+  sedeId: string
+  clienteNombre: string
+  clienteCi: string
+  clienteCuenta: string
+  monto: number | string
+  canalEmision: string | null
+  transferCode: string | null
+  workflowStatus: string
+  reconStatus: string
+  creadoAt: string
+  reclamadaPor: string | null
   nivel: number
 }
 
 export interface ConciliarBuscarResponse {
-  solicitud: Solicitud
-  autoMatch: ConciliarCandidate | null
-  candidates: ConciliarCandidate[]
+  transfer: Transferencia
+  candidates: SolicitudCandidate[]
 }
 
 export interface SyncMetrics {

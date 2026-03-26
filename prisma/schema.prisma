@@ -115,6 +115,19 @@ model StatementUpload {
   user            User     @relation(fields: [uploadedBy], references: [id])
 }
 
+// ── Sedes GT ──
+
+model Sede {
+  id        Int      @id @default(autoincrement())
+  prefix    String   @unique           // "L1", "L2", etc.
+  name      String                     // "POS Mayorista"
+  token     String   @unique           // Bearer token para sync
+  secret    String   @default("")      // HMAC secret
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ── Solicitudes GT (sistema distribuido offline-first) ──
 
 model Solicitud {

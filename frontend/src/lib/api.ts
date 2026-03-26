@@ -2,7 +2,7 @@ import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse,
 
 // ── Base fetch helper with credentials + 401 handling ──
 
-async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, { credentials: 'include', ...init })
   if (res.status === 401) {
     // Session expired — reload to trigger login
@@ -666,7 +666,7 @@ export function buildSolicitudesUrl(params: SolicitudesParams): string {
   if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   const qs = sp.toString()
-  return `/api/conciliar/pendientes${qs ? `?${qs}` : ''}`
+  return `/api/solicitudes${qs ? `?${qs}` : ''}`
 }
 
 export const solicitudesQuery = (params: SolicitudesParams) => {
@@ -677,8 +677,21 @@ export const solicitudesQuery = (params: SolicitudesParams) => {
   }
 }
 
-export async function buscarConciliacion(solicitudId: number): Promise<ConciliarBuscarResponse> {
-  const res = await apiFetch(`/api/conciliar/${solicitudId}/buscar`, { method: 'POST' })
+export async function getPendientesBancoConciliar(filters?: {
+  nombre?: string; ci?: string; cuenta?: string; canal?: string;
+  fechaDesde?: string; fechaHasta?: string; page?: number; limit?: number
+}): Promise<PendientesResponse> {
+  const params = new URLSearchParams()
+  if (filters?.nombre) params.set('nombre', filters.nombre)
+  if (filters?.ci) params.set('ci', filters.ci)
+  if (filters?.cuenta) params.set('cuenta', filters.cuenta)
+  if (filters?.canal) params.set('canal', filters.canal)
+  if (filters?.fechaDesde) params.set('fechaDesde', filters.fechaDesde)
+  if (filters?.fechaHasta) params.set('fechaHasta', filters.fechaHasta)
+  if (filters?.page) params.set('page', String(filters.page))
+  if (filters?.limit) params.set('limit', String(filters.limit))
+  const qs = params.toString()
+  const res = await apiFetch(`/api/conciliar/pendientes${qs ? '?' + qs : ''}`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
@@ -686,11 +699,20 @@ export async function buscarConciliacion(solicitudId: number): Promise<Conciliar
   return res.json()
 }
 
-export async function confirmarConciliacion(solicitudId: number, transferenciaId: number, matchNivel?: number): Promise<any> {
-  const res = await apiFetch(`/api/conciliar/${solicitudId}/confirmar`, {
+export async function buscarSolicitudesMatch(transferenciaId: number): Promise<ConciliarBuscarResponse> {
+  const res = await apiFetch(`/api/conciliar/${transferenciaId}/buscar`, { method: 'POST' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function confirmarConciliacion(transferenciaId: number, solicitudId: number, matchNivel?: number): Promise<any> {
+  const res = await apiFetch(`/api/conciliar/${transferenciaId}/confirmar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transferenciaId, matchNivel }),
+    body: JSON.stringify({ solicitudId, matchNivel }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -699,16 +721,20 @@ export async function confirmarConciliacion(solicitudId: number, transferenciaId
   return res.json()
 }
 
-export async function deshacerConciliacion(solicitudId: number): Promise<void> {
-  const res = await apiFetch(`/api/conciliar/${solicitudId}/deshacer`, { method: 'POST' })
+export async function deshacerConciliacion(transferenciaId: number): Promise<void> {
+  const res = await apiFetch(`/api/conciliar/${transferenciaId}/deshacer`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
   }
 }
 
-export async function autoConciliar(): Promise<any> {
-  const res = await apiFetch('/api/conciliar/auto', { method: 'POST' })
+export async function accionConciliar(transferenciaId: number, accion: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED'): Promise<any> {
+  const res = await apiFetch(`/api/conciliar/${transferenciaId}/accion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accion }),
+  })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)

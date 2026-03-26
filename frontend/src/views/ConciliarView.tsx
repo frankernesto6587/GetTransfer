@@ -1,214 +1,452 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Check, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
-import { solicitudesQuery, buscarConciliacion, confirmarConciliacion, autoConciliar } from '../lib/api'
-import type { Solicitud, ConciliarCandidate } from '../types'
+import { useState, useEffect, useCallback } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback'
+import {
+  CheckCircle,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Loader2,
+  XCircle,
+  User,
+  Hash,
+  Wallet,
+  Calendar,
+  MoreVertical,
+  Landmark,
+  ShoppingCart,
+  AlertTriangle,
+} from 'lucide-react'
+import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
+import {
+  getPendientesBancoConciliar,
+  buscarSolicitudesMatch,
+  confirmarConciliacion,
+  accionConciliar,
+} from '../lib/api'
+import type { Transferencia, SolicitudCandidate } from '../types'
 
-const nivelLabel: Record<number, { label: string; class: string }> = {
-  1: { label: 'L1 — Code+Cuenta+CI', class: 'bg-emerald-500/10 text-emerald-400' },
-  2: { label: 'L2 — Cuenta+CI', class: 'bg-blue-500/10 text-blue-400' },
-  3: { label: 'L3 — CI', class: 'bg-yellow-500/10 text-yellow-400' },
-  4: { label: 'L4 — Cuenta', class: 'bg-orange-500/10 text-orange-400' },
-  5: { label: 'L5 — Nombre', class: 'bg-red-500/10 text-red-400' },
+function displayFecha(f: string) {
+  const iso = f?.slice(0, 10)
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : f
+}
+
+const nivelLabels: Record<number, string> = {
+  1: 'Ref Origen + Monto',
+  2: 'Cuenta + CI + Monto',
+  3: 'CI + Monto',
+  4: 'Cuenta + Monto',
+  5: 'Nombre + Monto',
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function firstOfMonth() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
 export function ConciliarView() {
-  const queryClient = useQueryClient()
-  const [page] = useState(1)
-  const [selectedIdx, setSelectedIdx] = useState(0)
-  const [candidates, setCandidates] = useState<ConciliarCandidate[]>([])
-  const [autoMatch, setAutoMatch] = useState<ConciliarCandidate | null>(null)
+  const [pendientes, setPendientes] = useState<Transferencia[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [candidates, setCandidates] = useState<SolicitudCandidate[]>([])
+  const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
-  const [autoResult, setAutoResult] = useState<any>(null)
 
-  const { data, isLoading } = useQuery({
-    ...solicitudesQuery({ page, limit: 50 }),
-  })
+  const [confirmado, setConfirmado] = useState<{ solicitudCodigo: string } | null>(null)
 
-  const pendientes = data?.data ?? []
-  const total = data?.pagination?.total ?? 0
-  const selected = pendientes[selectedIdx] || null
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
 
-  async function handleBuscar(sol: Solicitud) {
-    setSearching(true)
+  // Filters
+  const [filterNombre, setFilterNombre] = useState('')
+  const [filterCi, setFilterCi] = useState('')
+  const [filterCuenta, setFilterCuenta] = useState('')
+  const [filterCanal, setFilterCanal] = useState('')
+  const [fechaDesde, setFechaDesde] = useState(firstOfMonth())
+  const [fechaHasta, setFechaHasta] = useState(today())
+  const [activePreset, setActivePreset] = useState<DatePresetKey | ''>('month')
+
+  const transfer = pendientes[currentIndex] ?? null
+
+  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string }) => {
+    setLoading(true)
     setError('')
     setCandidates([])
-    setAutoMatch(null)
+    setConfirmado(null)
     try {
-      const result = await buscarConciliacion(sol.id)
+      const result = await getPendientesBancoConciliar(filters)
+      setPendientes(result.data)
+      setCurrentIndex(0)
+      if (result.data.length === 0) {
+        setError('No hay transferencias pendientes de conciliar')
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error'
+      setPendientes([])
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const currentFilters = useCallback(() => {
+    const f: Record<string, string | undefined> = {}
+    if (filterNombre) f.nombre = filterNombre
+    if (filterCi) f.ci = filterCi
+    if (filterCuenta) f.cuenta = filterCuenta
+    if (filterCanal) f.canal = filterCanal
+    if (fechaDesde) f.fechaDesde = fechaDesde
+    if (fechaHasta) f.fechaHasta = fechaHasta
+    return Object.keys(f).length > 0 ? f : undefined
+  }, [filterNombre, filterCi, filterCuenta, filterCanal, fechaDesde, fechaHasta])
+
+  const debouncedReload = useDebouncedCallback((filters?: Record<string, string | undefined>) => {
+    loadPendientes(filters)
+  }, 300)
+
+  const clearFilters = useCallback(() => {
+    setFilterNombre(''); setFilterCi(''); setFilterCuenta(''); setFilterCanal('')
+    setFechaDesde(firstOfMonth()); setFechaHasta(today()); setActivePreset('month')
+    loadPendientes({ fechaDesde: firstOfMonth(), fechaHasta: today() })
+  }, [loadPendientes])
+
+  const applyPreset = useCallback((preset: DatePresetKey) => {
+    setActivePreset(preset)
+    const t = new Date()
+    let fd = '', fh = ''
+    switch (preset) {
+      case 'today': fd = today(); fh = today(); break
+      case 'week': { const w = new Date(t); w.setDate(w.getDate() - 6); fd = w.toISOString().slice(0, 10); fh = today(); break }
+      case 'month': fd = firstOfMonth(); fh = today(); break
+      case 'all': fd = ''; fh = ''; break
+    }
+    setFechaDesde(fd); setFechaHasta(fh)
+    loadPendientes({ ...currentFilters(), fechaDesde: fd || undefined, fechaHasta: fh || undefined })
+  }, [loadPendientes, currentFilters])
+
+  // Auto-search when transfer changes
+  const searchSolicitudes = useCallback(async (transferId: number) => {
+    setSearching(true)
+    setCandidates([])
+    setError('')
+    try {
+      const result = await buscarSolicitudesMatch(transferId)
       setCandidates(result.candidates)
-      setAutoMatch(result.autoMatch)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error buscando solicitudes')
     } finally {
       setSearching(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadPendientes({ fechaDesde: firstOfMonth(), fechaHasta: today() })
+  }, [loadPendientes])
+
+  useEffect(() => {
+    if (transfer && !confirmado) {
+      searchSolicitudes(transfer.id)
+    }
+  }, [transfer, confirmado, searchSolicitudes])
 
   const confirmarMut = useMutation({
-    mutationFn: ({ solId, transferId, nivel }: { solId: number; transferId: number; nivel?: number }) =>
-      confirmarConciliacion(solId, transferId, nivel),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['solicitudes'] })
-      setCandidates([])
-      setAutoMatch(null)
-      // Move to next
-      if (selectedIdx < pendientes.length - 1) setSelectedIdx(selectedIdx + 1)
+    mutationFn: async ({ transferId, solicitudId, matchNivel }: { transferId: number; solicitudId: number; matchNivel?: number }) => {
+      return confirmarConciliacion(transferId, solicitudId, matchNivel)
+    },
+    onSuccess: (data) => {
+      setConfirmado({ solicitudCodigo: data.solicitud?.codigo || '?' })
     },
   })
 
-  const autoMut = useMutation({
-    mutationFn: () => autoConciliar(),
-    onSuccess: (result) => {
-      setAutoResult(result)
-      queryClient.invalidateQueries({ queryKey: ['solicitudes'] })
+  const accionMut = useMutation({
+    mutationFn: async ({ transferId, accion }: { transferId: number; accion: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED' }) => {
+      return accionConciliar(transferId, accion)
+    },
+    onSuccess: (data) => {
+      setConfirmado({ solicitudCodigo: data.codigoConfirmacion || '?' })
+      setActionMenuOpen(false)
     },
   })
+
+  const handleConfirmar = (solicitudId: number, matchNivel?: number) => {
+    if (!transfer) return
+    confirmarMut.mutate({ transferId: transfer.id, solicitudId, matchNivel })
+  }
+
+  const navigateTo = (index: number) => {
+    setConfirmado(null)
+    setCandidates([])
+    confirmarMut.reset()
+    setCurrentIndex(index)
+  }
+
+  const handleSiguiente = () => {
+    if (confirmado) {
+      const newList = pendientes.filter((_, i) => i !== currentIndex)
+      setPendientes(newList)
+      const nextIndex = Math.min(currentIndex, newList.length - 1)
+      setCurrentIndex(-1)
+      setConfirmado(null)
+      setCandidates([])
+      confirmarMut.reset()
+      setTimeout(() => setCurrentIndex(Math.max(0, nextIndex)), 0)
+      if (newList.length === 0) setError('No hay transferencias pendientes')
+      return
+    }
+    if (currentIndex < pendientes.length - 1) navigateTo(currentIndex + 1)
+  }
+
+  const handleAnterior = () => {
+    if (currentIndex > 0) navigateTo(currentIndex - 1)
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center gap-3">
+          <Loader2 size={20} className="animate-spin text-gold" />
+          <span className="text-secondary text-sm">Cargando...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="p-4 md:p-8 max-w-[1000px] w-full">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Conciliar Solicitudes</h1>
-          <p className="text-secondary mt-1">
-            {total > 0
-              ? <><span className="text-white font-medium">{total}</span> solicitudes pendientes de conciliación</>
-              : 'Todas las solicitudes están conciliadas'}
-          </p>
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-white">Conciliar con Solicitudes</h1>
+          <p className="text-secondary mt-1">Vincular transferencias del banco con solicitudes GT</p>
         </div>
-        <button
-          onClick={() => autoMut.mutate()}
-          disabled={autoMut.isPending}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
-        >
-          <Zap size={16} />
-          {autoMut.isPending ? 'Procesando...' : 'Auto-conciliar'}
-        </button>
       </div>
 
-      {autoResult && (
-        <div className="mb-4 p-4 rounded-xl border border-border bg-surface">
-          <p className="text-white font-medium mb-1">Resultado auto-conciliación:</p>
-          <p className="text-secondary text-sm">
-            {autoResult.matched} conciliadas, {autoResult.noMatch} sin match, {autoResult.errors} errores
-            (de {autoResult.total} procesadas)
-          </p>
-          <button onClick={() => setAutoResult(null)} className="text-xs text-tertiary hover:text-secondary mt-1">Cerrar</button>
+      {/* Filter bar */}
+      <FilterBar
+        activeFilterCount={[filterNombre, filterCi, filterCuenta, filterCanal].filter(Boolean).length}
+        onClear={clearFilters}
+        resultCount={pendientes.length}
+        resultLabel="pendientes"
+        dateRow={
+          <>
+            <Calendar size={16} className="text-tertiary shrink-0" />
+            <DatePresets active={activePreset} onSelect={applyPreset} />
+            <span className="text-border hidden md:inline">|</span>
+            <FilterDateRange
+              desde={fechaDesde}
+              hasta={fechaHasta}
+              onDesdeChange={(v) => { setFechaDesde(v); setActivePreset(''); loadPendientes({ ...currentFilters(), fechaDesde: v || undefined }) }}
+              onHastaChange={(v) => { setFechaHasta(v); setActivePreset(''); loadPendientes({ ...currentFilters(), fechaHasta: v || undefined }) }}
+            />
+          </>
+        }
+        primaryFilters={
+          <>
+            <FilterInput icon={User} label="Nombre" value={filterNombre}
+              onChange={(v) => { setFilterNombre(v); debouncedReload({ ...currentFilters(), nombre: v || undefined }) }}
+              className="w-full md:w-40" />
+            <FilterInput icon={Hash} label="CI" value={filterCi}
+              onChange={(v) => { setFilterCi(v); debouncedReload({ ...currentFilters(), ci: v || undefined }) }}
+              className="w-full md:w-32" />
+            <FilterInput icon={Wallet} label="Cuenta" value={filterCuenta}
+              onChange={(v) => { setFilterCuenta(v); debouncedReload({ ...currentFilters(), cuenta: v || undefined }) }}
+              className="w-full md:w-40" />
+            <FilterSelect value={filterCanal}
+              onChange={(v) => { setFilterCanal(v); loadPendientes({ ...currentFilters(), canal: v || undefined }) }}
+              options={[
+                { value: 'BANCA MOVIL', label: 'BANCA MOVIL' },
+                { value: 'BANCAMOVIL-BPA', label: 'BANCAMOVIL-BPA' },
+                { value: 'TRANSFERMOVIL', label: 'TRANSFERMOVIL' },
+              ]}
+              allLabel="Todos los canales"
+              className="w-full md:w-44" />
+          </>
+        }
+      />
+
+      {/* No pending */}
+      {pendientes.length === 0 && !loading && (
+        <div className="rounded-xl border border-border bg-surface p-12 text-center">
+          <CheckCircle size={48} className="mx-auto text-emerald-400/50 mb-4" />
+          <p className="text-secondary text-lg">{error || 'No hay transferencias pendientes'}</p>
         </div>
       )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-secondary animate-pulse">Cargando...</div>
-        </div>
-      ) : pendientes.length === 0 ? (
-        <div className="text-center py-20 text-secondary">No hay solicitudes pendientes de conciliación.</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left: solicitud detail */}
-          <div className="rounded-xl border border-border bg-surface p-5">
+      {/* Current transfer */}
+      {transfer && (
+        <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr] gap-6">
+          {/* Left: Bank Transfer */}
+          <div className="rounded-xl border border-border bg-surface p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline text-lg font-semibold text-white">
-                Solicitud {selectedIdx + 1} de {pendientes.length}
-              </h3>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => { setSelectedIdx(Math.max(0, selectedIdx - 1)); setCandidates([]); setAutoMatch(null) }}
-                  disabled={selectedIdx === 0}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-tertiary hover:text-white disabled:opacity-30"
-                ><ChevronLeft size={16} /></button>
-                <button
-                  onClick={() => { setSelectedIdx(Math.min(pendientes.length - 1, selectedIdx + 1)); setCandidates([]); setAutoMatch(null) }}
-                  disabled={selectedIdx >= pendientes.length - 1}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-tertiary hover:text-white disabled:opacity-30"
-                ><ChevronRight size={16} /></button>
+              <h3 className="font-headline text-lg font-semibold text-white">Transferencia Banco</h3>
+              <div className="flex items-center gap-2">
+                {/* Action dropdown */}
+                <div className="relative">
+                  <button onClick={() => setActionMenuOpen(!actionMenuOpen)}
+                    className="p-1.5 text-tertiary hover:text-white rounded transition-colors cursor-pointer"
+                    title="Acciones especiales">
+                    <MoreVertical size={16} />
+                  </button>
+                  {actionMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setActionMenuOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-surface shadow-xl py-1">
+                        <button onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'CONFIRMED_DEPOSIT' })}
+                          disabled={accionMut.isPending}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40">
+                          <Landmark size={14} className="text-blue-400" />Depósito
+                        </button>
+                        <button onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'CONFIRMED_BUY' })}
+                          disabled={accionMut.isPending}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40">
+                          <ShoppingCart size={14} className="text-emerald-400" />Compra
+                        </button>
+                        <button onClick={() => transfer && accionMut.mutate({ transferId: transfer.id, accion: 'REVIEW_REQUIRED' })}
+                          disabled={accionMut.isPending}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-secondary hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40">
+                          <AlertTriangle size={14} className="text-amber-400" />Requiere revisión
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
-            {selected && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-gold font-mono font-bold text-lg">{selected.codigo}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-white/5 text-tertiary">{selected.sedeId}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <span className="text-tertiary text-xs">Nombre</span>
-                    <p className="text-white">{selected.clienteNombre}</p>
+            {(() => {
+              const bestMatch = candidates[0] || null
+              const m = bestMatch ? getMatchingFields(transfer, bestMatch) : null
+              return (
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Nombre</span>
+                    <span className={`font-medium ${m ? nombreClass(m.nombre) : 'text-white'}`}>{transfer.nombreOrdenante || '—'}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">CI</span>
-                    <p className="text-white font-mono">{selected.clienteCi}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">CI</span>
+                    <span className={`font-mono ${m?.ci ? matchClass : 'text-white'}`}>{transfer.ciOrdenante || '—'}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">Cuenta</span>
-                    <p className="text-white font-mono text-xs">{selected.clienteCuenta}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Cuenta</span>
+                    <span className={`font-mono text-xs ${m?.cuenta ? matchClass : 'text-white'}`}>{transfer.cuentaOrdenante || '—'}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">Monto</span>
-                    <p className="text-emerald-400 font-mono font-bold">${Number(selected.monto).toLocaleString('es-CU', { minimumFractionDigits: 2 })}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Importe</span>
+                    <span className={`font-mono font-medium ${m?.importe ? matchClass : 'text-white'}`}>${transfer.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">Transfer Code</span>
-                    <p className="text-white font-mono">{selected.transferCode || '-'}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Fecha</span>
+                    <span className="text-white">{displayFecha(transfer.fecha)}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">Canal</span>
-                    <p className="text-secondary">{selected.canalEmision || '-'}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Canal</span>
+                    <span className="text-secondary">{transfer.canalEmision || '—'}</span>
                   </div>
-                  <div>
-                    <span className="text-tertiary text-xs">Reclamada por</span>
-                    <p className="text-secondary">{selected.reclamadaPor || '-'}</p>
+                  <div className="flex justify-between">
+                    <span className="text-tertiary">Ref Origen</span>
+                    <span className={`font-mono text-xs ${m?.ref ? matchClass : 'text-secondary'}`}>{transfer.refOrigen || '—'}</span>
                   </div>
                 </div>
+              )
+            })()}
 
-                <button
-                  onClick={() => handleBuscar(selected)}
-                  disabled={searching}
-                  className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gold/10 text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
-                >
-                  <Search size={16} />
-                  {searching ? 'Buscando...' : 'Buscar en Banco'}
+            {/* Navigation */}
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+              <button onClick={handleAnterior} disabled={currentIndex === 0}
+                className="flex items-center gap-1 text-sm text-secondary hover:text-white transition-colors cursor-pointer disabled:opacity-30">
+                <ChevronLeft size={16} />Anterior
+              </button>
+              <span className="text-xs text-tertiary">{currentIndex + 1} / {pendientes.length}</span>
+              <button onClick={() => navigateTo(currentIndex + 1)} disabled={currentIndex >= pendientes.length - 1}
+                className="flex items-center gap-1 text-sm text-secondary hover:text-white transition-colors cursor-pointer disabled:opacity-30">
+                Siguiente<ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Right: Solicitud candidates */}
+          <div className="rounded-xl border border-border bg-surface p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline text-lg font-semibold text-white">Solicitudes Candidatas</h3>
+              {!searching && !confirmado && (
+                <button onClick={() => transfer && searchSolicitudes(transfer.id)}
+                  className="flex items-center gap-1 text-xs text-tertiary hover:text-white transition-colors cursor-pointer">
+                  <Search size={12} />Re-buscar
+                </button>
+              )}
+            </div>
+
+            {/* Post-confirmation */}
+            {confirmado && (
+              <div className="text-center py-8">
+                <CheckCircle size={48} className="mx-auto text-emerald-400 mb-4" />
+                <p className="font-mono text-2xl font-bold text-white tracking-wider mb-2">{confirmado.solicitudCodigo}</p>
+                <p className="text-emerald-400 text-sm mb-1">Conciliado</p>
+                <button onClick={handleSiguiente}
+                  className="mt-6 px-4 py-2 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors cursor-pointer text-sm">
+                  Siguiente pendiente
                 </button>
               </div>
             )}
-          </div>
 
-          {/* Right: candidates */}
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <h3 className="font-headline text-lg font-semibold text-white mb-4">Transferencias del Banco</h3>
-
-            {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-            {autoMatch && (
-              <div className="mb-4 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5">
-                <p className="text-emerald-400 text-sm font-medium mb-2">Auto-match encontrado (Nivel 1)</p>
-                <CandidateCard
-                  c={autoMatch}
-                  onConfirm={() => confirmarMut.mutate({ solId: selected!.id, transferId: autoMatch.id, nivel: 1 })}
-                  confirming={confirmarMut.isPending}
-                />
+            {/* Searching */}
+            {searching && !confirmado && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 size={20} className="animate-spin text-gold mr-3" />
+                <span className="text-secondary text-sm">Buscando solicitudes...</span>
               </div>
             )}
 
-            {candidates.length === 0 && !autoMatch && !searching && (
-              <p className="text-tertiary text-sm">Haz clic en "Buscar en Banco" para encontrar transferencias que coincidan.</p>
+            {/* Error */}
+            {error && !searching && !confirmado && pendientes.length > 0 && (
+              <div className="flex items-center gap-2 text-red-400 text-sm py-4">
+                <AlertCircle size={16} />{error}
+              </div>
             )}
 
-            {searching && (
-              <div className="text-secondary animate-pulse text-sm">Buscando transferencias...</div>
+            {/* Candidates */}
+            {!searching && !confirmado && candidates.length > 0 && (
+              <div>
+                <p className="text-amber-400 text-sm mb-3">
+                  {candidates.length} solicitud{candidates.length > 1 ? 'es' : ''} encontrada{candidates.length > 1 ? 's' : ''}
+                </p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {candidates.map((c) => (
+                    <SolicitudCard
+                      key={c.id}
+                      candidate={c}
+                      transfer={transfer}
+                      onConfirmar={() => handleConfirmar(c.id, c.nivel)}
+                      confirming={confirmarMut.isPending}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
 
-            {candidates.filter(c => c !== autoMatch).map((c) => (
-              <CandidateCard
-                key={c.id}
-                c={c}
-                onConfirm={() => confirmarMut.mutate({ solId: selected!.id, transferId: c.id, nivel: c.nivel })}
-                confirming={confirmarMut.isPending}
-              />
-            ))}
+            {/* No match */}
+            {!searching && !confirmado && candidates.length === 0 && !error && (
+              <div className="text-center py-12">
+                <XCircle size={36} className="mx-auto text-tertiary mb-3" />
+                <p className="text-secondary text-sm">Sin solicitudes que coincidan</p>
+              </div>
+            )}
+
+            {/* Mutation errors */}
+            {confirmarMut.isError && (
+              <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} />{confirmarMut.error?.message || 'Error al conciliar'}
+              </div>
+            )}
+            {accionMut.isError && (
+              <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} />{accionMut.error?.message || 'Error en acción'}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -216,27 +454,104 @@ export function ConciliarView() {
   )
 }
 
-function CandidateCard({ c, onConfirm, confirming }: { c: ConciliarCandidate; onConfirm: () => void; confirming: boolean }) {
-  const n = nivelLabel[c.nivel] || { label: `L${c.nivel}`, class: 'bg-white/5 text-secondary' }
+// ── Helpers ──
+
+const matchClass = 'text-emerald-400'
+const similarClass = 'text-cyan-400'
+
+function fieldsMatch(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+function getMatchingFields(transfer: Transferencia, sol: SolicitudCandidate) {
+  return {
+    ci: fieldsMatch(transfer.ciOrdenante, sol.clienteCi),
+    cuenta: fieldsMatch(transfer.cuentaOrdenante, sol.clienteCuenta),
+    nombre: fieldsMatch(transfer.nombreOrdenante, sol.clienteNombre) ? 'exact' as const
+      : nameSim(transfer.nombreOrdenante, sol.clienteNombre) >= 50 ? 'similar' as const : 'none' as const,
+    importe: transfer.importe === Number(sol.monto),
+    ref: fieldsMatch(transfer.refOrigen, sol.transferCode),
+  }
+}
+
+function nameSim(a: string, b: string): number {
+  if (!a || !b) return 0
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  const ta = norm(a).split(/\s+/), tb = norm(b).split(/\s+/)
+  if (!ta.length || !tb.length) return 0
+  let m = 0
+  for (const x of ta) for (const y of tb) { if (x === y) { m++; break } }
+  return (m / Math.max(ta.length, tb.length)) * 100
+}
+
+function nombreClass(n: 'exact' | 'similar' | 'none'): string {
+  return n === 'exact' ? matchClass : n === 'similar' ? similarClass : 'text-white'
+}
+
+// ── Solicitud Card ──
+
+function SolicitudCard({
+  candidate: c,
+  transfer,
+  onConfirmar,
+  confirming,
+}: {
+  candidate: SolicitudCandidate
+  transfer: Transferencia | null
+  onConfirmar: () => void
+  confirming: boolean
+}) {
+  const m = transfer ? getMatchingFields(transfer, c) : null
+
   return (
-    <div className="p-3 rounded-lg border border-border bg-page mb-2">
-      <div className="flex items-center justify-between mb-2">
-        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${n.class}`}>{n.label}</span>
-        <span className="text-white font-mono font-bold">${c.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
+    <div className="rounded-lg border border-border/50 bg-white/[0.02] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-gold font-mono font-medium">{c.codigo}</span>
+          <span className="text-tertiary text-xs">{c.sedeId}</span>
+        </div>
+        <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-tertiary">
+          Nivel {c.nivel} — {nivelLabels[c.nivel] || ''}
+        </span>
       </div>
-      <div className="grid grid-cols-2 gap-1 text-xs mb-2">
-        <div><span className="text-tertiary">Ref:</span> <span className="text-white font-mono">{c.refOrigen}</span></div>
-        <div><span className="text-tertiary">Fecha:</span> <span className="text-secondary">{new Date(c.fecha).toLocaleDateString('es-CU')}</span></div>
-        <div><span className="text-tertiary">CI:</span> <span className="text-white font-mono">{c.ciOrdenante || '-'}</span></div>
-        <div><span className="text-tertiary">Cuenta:</span> <span className="text-white font-mono">{c.cuentaOrdenante || '-'}</span></div>
-        <div className="col-span-2"><span className="text-tertiary">Nombre:</span> <span className="text-white">{c.nombreOrdenante || '-'}</span></div>
+      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div>
+          <span className="text-tertiary">Monto</span>
+          <p className={`font-mono ${m?.importe ? matchClass : 'text-white'}`}>
+            ${Number(c.monto).toLocaleString('es-CU', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        <div>
+          <span className="text-tertiary">Transfer Code</span>
+          <p className={`font-mono ${m?.ref ? matchClass : 'text-secondary'}`}>{c.transferCode || '—'}</p>
+        </div>
+        <div>
+          <span className="text-tertiary">CI</span>
+          <p className={`font-mono ${m?.ci ? matchClass : 'text-secondary'}`}>{c.clienteCi}</p>
+        </div>
+        <div>
+          <span className="text-tertiary">Nombre</span>
+          <p className={m ? nombreClass(m.nombre) : 'text-secondary'}>{c.clienteNombre}</p>
+        </div>
+        <div>
+          <span className="text-tertiary">Cuenta</span>
+          <p className={`font-mono text-[11px] ${m?.cuenta ? matchClass : 'text-secondary'}`}>{c.clienteCuenta}</p>
+        </div>
+        <div>
+          <span className="text-tertiary">Canal</span>
+          <p className="text-secondary">{c.canalEmision || '—'}</p>
+        </div>
+        {c.reclamadaPor && (
+          <div className="col-span-2">
+            <span className="text-tertiary">Reclamada por</span>
+            <p className="text-secondary">{c.reclamadaPor}</p>
+          </div>
+        )}
       </div>
-      <button
-        onClick={onConfirm}
-        disabled={confirming}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors text-sm disabled:opacity-50"
-      >
-        <Check size={14} />
+      <button onClick={onConfirmar} disabled={confirming}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium">
+        <CheckCircle size={14} />
         {confirming ? 'Conciliando...' : 'Conciliar'}
       </button>
     </div>

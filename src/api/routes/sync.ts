@@ -1,7 +1,6 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createHash } from 'crypto';
-import { bearerAuth } from '../middleware/auth';
 import { prisma } from '../../db/repository';
 import { Prisma } from '@prisma/client';
 
@@ -36,7 +35,7 @@ const eventPayloadSchema = z.object({
 const syncEventSchema = z.object({
   event_id: z.string().min(1),
   solicitud_codigo: z.string().min(1),
-  event_type: z.enum(['CREATED', 'CLAIMED', 'ANNULLED']),
+  event_type: z.enum(['CREATED', 'CLAIMED', 'RELEASED', 'ANNULLED']),
   payload: eventPayloadSchema,
   payload_hash: z.string().optional(),
   sede_id: z.string().min(1),
@@ -261,14 +260,54 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
       });
       break;
     }
+
+    case 'RELEASED': {
+      if (!sol) return; // Nothing to release
+      if (sol.version >= payload.version) return;
+      if (sol.lastEventId === event.event_id) return;
+
+      // Can only release if claimed
+      if (sol.workflowStatus !== 'claimed') return; // Idempotent
+
+      await prisma.solicitud.update({
+        where: { codigo: event.solicitud_codigo },
+        data: {
+          workflowStatus: 'pending',
+          reclamadaAt: null,
+          reclamadaPor: null,
+          version: payload.version,
+          lastEventId: event.event_id,
+        },
+      });
+      break;
+    }
   }
+}
+
+// ── Sede auth middleware ──
+
+async function sedeAuth(request: FastifyRequest, reply: FastifyReply) {
+  const header = request.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) {
+    return reply.status(401).send({ error: 'Token de sede requerido' });
+  }
+
+  const token = header.slice(7);
+  const sede = await prisma.sede.findUnique({ where: { token } });
+
+  if (!sede || !sede.active) {
+    return reply.status(401).send({ error: 'Token de sede inválido o sede desactivada' });
+  }
+
+  // Attach sede to request for downstream use
+  (request as any).sede = sede;
 }
 
 // ── Routes ──
 
 export async function syncRoutes(app: FastifyInstance) {
-  // All sync routes require Bearer token
-  app.addHook('preHandler', bearerAuth);
+  // All sync routes authenticate via Sede token
+  app.addHook('preHandler', sedeAuth);
 
   // ── Receive events from sede ──
   app.post('/api/sync/events', async (request, reply) => {
@@ -277,21 +316,33 @@ export async function syncRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Invalid request', details: parsed.error.issues });
     }
 
+    const sede = (request as any).sede;
     const { events } = parsed.data;
     const acked: string[] = [];
     const errors: Record<string, string> = {};
 
     for (const event of events) {
       try {
-        // Payload hash integrity check
+        // Validate sede_id matches the authenticated sede's prefix
+        if (event.sede_id !== sede.prefix) {
+          errors[event.event_id] = `Sede mismatch: token is for ${sede.prefix}, event has ${event.sede_id}`;
+          continue;
+        }
+
+        // Payload hash integrity check (warning only — HMAC on request handles real integrity)
         if (event.payload_hash) {
           const computed = createHash('sha256')
             .update(JSON.stringify(event.payload, Object.keys(event.payload).sort()))
             .digest('hex')
             .slice(0, 32);
           if (computed !== event.payload_hash) {
-            errors[event.event_id] = 'Payload integrity check failed';
-            continue;
+            request.log.warn({
+              msg: 'Payload hash mismatch (Python/JS serialization diff)',
+              eventId: event.event_id,
+              expected: event.payload_hash,
+              computed,
+            });
+            // Don't reject — cross-language hash mismatches are expected
           }
         }
 

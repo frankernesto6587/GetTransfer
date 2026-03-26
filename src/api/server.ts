@@ -25,6 +25,7 @@ import { monitorRoutes } from './routes/monitor';
 import { statementRoutes } from './routes/statements';
 import { syncRoutes } from './routes/sync';
 import { conciliarRoutes } from './routes/conciliar';
+import { sedeRoutes } from './routes/sedes';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
 import { jwtAuth } from './middleware/auth';
@@ -48,7 +49,7 @@ async function main() {
 
   // Plugins
   await app.register(cors, {
-    origin: process.env.FRONTEND_URL || true,
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
@@ -96,6 +97,7 @@ async function main() {
   await app.register(statementRoutes);
   await app.register(syncRoutes);
   await app.register(conciliarRoutes);
+  await app.register(sedeRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
