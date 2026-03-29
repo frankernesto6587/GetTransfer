@@ -466,14 +466,13 @@ export async function syncRoutes(app: FastifyInstance) {
     };
   });
 
-  // ── Pull updates: solicitudes matched but not yet notified to sede ──
+  // ── Pull updates: solicitudes with changes not yet notified to sede ──
   app.get('/api/sync/updates', async (request, reply) => {
     const sede = (request as any).sede;
 
     const updated = await prisma.solicitud.findMany({
       where: {
         sedeId: sede.prefix,
-        reconStatus: 'matched',
         sedeNotified: false,
       },
       include: { transferencia: true },
@@ -484,6 +483,7 @@ export async function syncRoutes(app: FastifyInstance) {
       updates: updated.map(s => ({
         codigo: s.codigo,
         reconStatus: s.reconStatus,
+        transferCode: s.transferCode,
         conciliadaAt: s.conciliadaAt?.toISOString() || null,
         conciliadaPor: s.conciliadaPor,
         matchNivel: s.matchNivel,

@@ -148,6 +148,10 @@ function nameSimilarity(a: string, b: string): number {
 
 // ── Routes ──
 
+const editSolicitudSchema = z.object({
+  transferCode: z.string().min(1),
+});
+
 export async function conciliarRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('admin', 'confirmer'));
 
@@ -214,6 +218,31 @@ export async function conciliarRoutes(app: FastifyInstance) {
         cantidad: aggregates._count.id,
       },
     };
+  });
+
+  // ── Edit solicitud transferCode ──
+  app.put('/api/solicitudes/:id', async (request, reply) => {
+    const { id } = idSchema.parse(request.params);
+    const body = editSolicitudSchema.parse(request.body);
+
+    const sol = await prisma.solicitud.findUnique({ where: { id } });
+    if (!sol) return reply.status(404).send({ error: 'Solicitud no encontrada' });
+    if (sol.workflowStatus === 'cancelled') {
+      return reply.status(409).send({ error: 'No se puede editar una solicitud anulada' });
+    }
+    if (sol.reconStatus === 'matched') {
+      return reply.status(409).send({ error: 'No se puede editar una solicitud ya conciliada' });
+    }
+
+    const updated = await prisma.solicitud.update({
+      where: { id },
+      data: {
+        transferCode: body.transferCode,
+        sedeNotified: false, // Trigger pull to sync change to Odoo
+      },
+    });
+
+    return updated;
   });
 
   // ── List bank transfers without solicitud (pendientes de conciliar) ──

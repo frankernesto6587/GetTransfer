@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, User, Hash, Wallet, Building2, Eye, X } from 'lucide-react'
+import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle } from 'lucide-react'
 import { FilterBar, FilterInput, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
-import { solicitudesQuery } from '../lib/api'
+import { solicitudesQuery, apiFetch } from '../lib/api'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useUIStore } from '../stores/uiStore'
 import type { Solicitud } from '../types'
@@ -237,7 +237,7 @@ export function SolicitudesView() {
       )}
 
       {/* Detail Modal */}
-      {selected && <SolicitudDetailModal solicitud={selected} onClose={() => setSelected(null)} />}
+      {selected && <SolicitudDetailModal solicitud={selected} onClose={() => setSelected(null)} onRefresh={() => queryClient.invalidateQueries({ queryKey: ['solicitudes'] })} />}
     </div>
   )
 }
@@ -261,9 +261,38 @@ function formatCurrency(amount: number) {
   return amount.toLocaleString('es-CU', { minimumFractionDigits: 2 })
 }
 
-function SolicitudDetailModal({ solicitud: s, onClose }: { solicitud: Solicitud; onClose: () => void }) {
+function SolicitudDetailModal({ solicitud: s, onClose, onRefresh }: { solicitud: Solicitud; onClose: () => void; onRefresh?: () => void }) {
   const wfBadge = workflowBadge[s.workflowStatus] ?? workflowBadge.pending
   const rcBadge = reconBadge[s.reconStatus] ?? reconBadge.unmatched
+
+  const [editing, setEditing] = useState(false)
+  const [editTransferCode, setEditTransferCode] = useState(s.transferCode || '')
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
+  const canEdit = s.workflowStatus !== 'cancelled' && s.reconStatus !== 'matched'
+
+  const handleSave = async () => {
+    setSaving(true)
+    setEditError('')
+    try {
+      const res = await apiFetch(`/api/solicitudes/${s.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transferCode: editTransferCode }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${res.status}`)
+      }
+      onRefresh?.()
+      onClose()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Error al guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
@@ -308,9 +337,30 @@ function SolicitudDetailModal({ solicitud: s, onClose }: { solicitud: Solicitud;
 
           {/* Transferencia */}
           <div>
-            <h4 className="text-xs uppercase tracking-wider text-tertiary mb-2 font-medium">Datos de la Transferencia</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs uppercase tracking-wider text-tertiary font-medium">Datos de la Transferencia</h4>
+              {canEdit && !editing && (
+                <button onClick={() => { setEditing(true); setEditTransferCode(s.transferCode || '') }} className="p-1 rounded hover:bg-white/10 text-tertiary hover:text-white transition-colors" title="Editar">
+                  <Pencil size={14} />
+                </button>
+              )}
+              {editing && (
+                <div className="flex items-center gap-1">
+                  <button onClick={handleSave} disabled={saving} className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 transition-colors disabled:opacity-40" title="Guardar"><Save size={14} /></button>
+                  <button onClick={() => { setEditing(false); setEditError('') }} disabled={saving} className="p-1 rounded hover:bg-white/10 text-secondary hover:text-white transition-colors disabled:opacity-40" title="Cancelar"><XCircle size={14} /></button>
+                </div>
+              )}
+            </div>
+            {editError && <div className="text-red-400 text-sm mb-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">{editError}</div>}
             <div className="bg-page rounded-lg px-4 py-1">
-              <DetailRow label="Transfer Code" value={s.transferCode} mono />
+              {editing ? (
+                <div className="flex justify-between items-center py-2 border-b border-border/50">
+                  <span className="text-secondary text-sm">Transfer Code</span>
+                  <input value={editTransferCode} onChange={(e) => setEditTransferCode(e.target.value.toUpperCase())} className="bg-surface border border-border rounded px-2 py-1 text-white text-sm font-mono w-40 text-right focus:outline-none focus:border-gold/50" />
+                </div>
+              ) : (
+                <DetailRow label="Transfer Code" value={s.transferCode} mono />
+              )}
               <DetailRow label="Canal" value={s.canalEmision} />
               <DetailRow label="Creada" value={formatDate(s.creadoAt)} mono />
               <DetailRow label="Creada por" value={s.creadoPor} />
