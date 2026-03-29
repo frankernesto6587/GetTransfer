@@ -665,49 +665,73 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     if (filters.fechaHasta) (dateWhere.fecha as any).lte = new Date(filters.fechaHasta + 'T23:59:59Z');
   }
 
-  const confirmedWhere: Prisma.TransferenciaWhereInput = { ...dateWhere, codigoConfirmacion: { not: null } };
-  const pendingWhere: Prisma.TransferenciaWhereInput = { ...dateWhere, codigoConfirmacion: null };
+  const pendingWhere: Prisma.TransferenciaWhereInput = { ...dateWhere, solicitud: { is: null } };
 
   const [
     aggTotal,
     aggCreditos,
     aggDebitos,
-    matchStatsRaw,
+    matchAutoCount,
+    matchManualCount,
+    matchTotalCount,
     aggPendientes,
     dailyGt,
-    dailyMatches,
-    recentMatches,
+    recentMatchSolicitudes,
   ] = await Promise.all([
     // GT Totals
     prisma.transferencia.aggregate({ where: dateWhere, _sum: { importe: true }, _count: { id: true } }),
     prisma.transferencia.aggregate({ where: { ...dateWhere, tipo: 'Cr' }, _sum: { importe: true }, _count: { id: true } }),
     prisma.transferencia.aggregate({ where: { ...dateWhere, tipo: 'Db' }, _sum: { importe: true }, _count: { id: true } }),
-    // Match stats by type
-    prisma.transferencia.groupBy({ by: ['matchType'], where: confirmedWhere, _count: { id: true } }),
-    // Pendientes
+    // Match stats from Solicitud
+    prisma.solicitud.count({ where: { reconStatus: 'matched', conciliadaPor: 'auto' } }),
+    prisma.solicitud.count({ where: { reconStatus: 'matched', matchNivel: { not: null }, conciliadaPor: { not: 'auto' } } }),
+    prisma.solicitud.count({ where: { reconStatus: 'matched' } }),
+    // Pendientes (transfers without solicitud)
     prisma.transferencia.aggregate({ where: pendingWhere, _sum: { importe: true }, _count: { id: true } }),
     // Daily GT series (by tipo)
     prisma.transferencia.groupBy({ by: ['fecha', 'tipo'], where: dateWhere, _sum: { importe: true }, orderBy: { fecha: 'asc' } }),
-    // Daily matches series
-    prisma.transferencia.groupBy({ by: ['fecha'], where: confirmedWhere, _sum: { importe: true }, orderBy: { fecha: 'asc' } }),
-    // Recent matches
-    prisma.transferencia.findMany({ where: confirmedWhere, orderBy: { confirmedAt: 'desc' }, take: 15 }),
+    // Recent matches (from Solicitud with transferencia)
+    prisma.solicitud.findMany({
+      where: { reconStatus: 'matched', transferenciaId: { not: null } },
+      include: { transferencia: true },
+      orderBy: { conciliadaAt: 'desc' },
+      take: 15,
+    }),
   ]);
 
-  // Parse match stats
-  const matchStats = { total: 0, auto: 0, manual: 0, deposito: 0, compra: 0, revision: 0 };
-  for (const row of matchStatsRaw) {
-    const mt = row.matchType || '';
-    const count = row._count.id;
-    matchStats.total += count;
-    if (mt === 'CONFIRMED_AUTO') matchStats.auto = count;
-    else if (mt.startsWith('CONFIRMED_MANUAL')) matchStats.manual += count;
-    else if (mt === 'CONFIRMED_DEPOSIT') matchStats.deposito = count;
-    else if (mt === 'CONFIRMED_BUY') matchStats.compra = count;
-    else if (mt === 'REVIEW_REQUIRED') matchStats.revision = count;
-  }
+  // Build match stats
+  const matchStats = {
+    total: matchTotalCount,
+    auto: matchAutoCount,
+    manual: matchManualCount,
+    deposito: 0,
+    compra: 0,
+    revision: 0,
+  };
 
-  // Build daily series — merge Cr/Db/match by fecha
+  // Build recentMatches as flat objects
+  const recentMatches = recentMatchSolicitudes.map(sol => {
+    const t = sol.transferencia;
+    return {
+      id: t?.id ?? sol.id,
+      fecha: t?.fecha ?? null,
+      refOrigen: t?.refOrigen ?? '',
+      importe: t?.importe ?? 0,
+      tipo: t?.tipo ?? 'Cr',
+      nombreOrdenante: t?.nombreOrdenante ?? '',
+      canalEmision: t?.canalEmision ?? '',
+      codigoConfirmacion: sol.codigo,
+      confirmedAt: sol.conciliadaAt,
+      matchType: sol.conciliadaPor === 'auto' ? 'CONFIRMED_AUTO' : (sol.matchNivel ? `MANUAL_L${sol.matchNivel}` : null),
+      solicitud_codigo: sol.codigo,
+      solicitud_clienteNombre: sol.clienteNombre,
+      solicitud_sedeId: sol.sedeId,
+      solicitud_matchNivel: sol.matchNivel,
+      solicitud_conciliadaPor: sol.conciliadaPor,
+    };
+  });
+
+  // Build daily series — Cr/Db by fecha + match count from solicitudes
   const dayMap = new Map<string, { fecha: string; gtCreditos: number; gtDebitos: number; matchImporte: number }>();
   for (const row of dailyGt) {
     const key = row.fecha.toISOString().slice(0, 10);
@@ -716,10 +740,14 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     if (row.tipo === 'Cr') entry.gtCreditos = row._sum.importe ?? 0;
     else if (row.tipo === 'Db') entry.gtDebitos = row._sum.importe ?? 0;
   }
-  for (const row of dailyMatches) {
-    const key = row.fecha.toISOString().slice(0, 10);
-    if (!dayMap.has(key)) dayMap.set(key, { fecha: key, gtCreditos: 0, gtDebitos: 0, matchImporte: 0 });
-    dayMap.get(key)!.matchImporte = row._sum.importe ?? 0;
+  // Add match amounts from recent matched solicitudes (by transferencia fecha)
+  for (const sol of recentMatchSolicitudes) {
+    if (sol.transferencia?.fecha) {
+      const key = sol.transferencia.fecha.toISOString().slice(0, 10);
+      if (dayMap.has(key)) {
+        dayMap.get(key)!.matchImporte += Number(sol.monto);
+      }
+    }
   }
   const porDia = Array.from(dayMap.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
 
