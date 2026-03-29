@@ -41,7 +41,14 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
   REVIEW_REQUIRED: 'Revision',
 }
 
-function MatchTypeBadge({ matchType }: { matchType: string | null }) {
+function MatchTypeBadge({ matchType, conciliadaPor, matchNivel }: { matchType: string | null; conciliadaPor?: string | null; matchNivel?: number | null }) {
+  if (conciliadaPor === 'auto') {
+    return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-emerald-500/15 text-emerald-400">Auto</span>
+  }
+  if (matchNivel) {
+    const nivelColors: Record<number, string> = { 1: 'bg-blue-500/15 text-blue-400', 2: 'bg-blue-500/15 text-blue-400', 3: 'bg-cyan-500/15 text-cyan-400', 4: 'bg-cyan-500/15 text-cyan-400', 5: 'bg-cyan-500/15 text-cyan-400' }
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${nivelColors[matchNivel] || 'bg-white/10 text-secondary'}`}>Manual L{matchNivel}</span>
+  }
   if (!matchType) return <span className="text-tertiary">—</span>
   const colorClass = MATCH_TYPE_COLORS[matchType] || 'bg-white/10 text-secondary'
   const label = MATCH_TYPE_LABELS[matchType] || matchType
@@ -302,7 +309,8 @@ export function DashboardView() {
                   <th className="px-4 py-2 text-xs text-tertiary font-medium">Nombre</th>
                   <th className="px-4 py-2 text-xs text-tertiary font-medium text-right">Monto</th>
                   <th className="px-4 py-2 text-xs text-tertiary font-medium">Tipo Match</th>
-                  <th className="px-4 py-2 text-xs text-tertiary font-medium">Codigo</th>
+                  <th className="px-4 py-2 text-xs text-tertiary font-medium">Solicitud</th>
+                  <th className="px-4 py-2 text-xs text-tertiary font-medium">Cliente</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,10 +323,11 @@ export function DashboardView() {
                     <td className="px-4 py-2.5 text-secondary text-xs font-mono">{displayFecha(match.fecha)}</td>
                     <td className="px-4 py-2.5 text-white truncate max-w-[200px]">{match.nombreOrdenante || '—'}</td>
                     <td className="px-4 py-2.5 text-white font-mono text-right">{formatCurrency(match.importe)}</td>
-                    <td className="px-4 py-2.5"><MatchTypeBadge matchType={match.matchType} /></td>
+                    <td className="px-4 py-2.5"><MatchTypeBadge matchType={match.matchType} conciliadaPor={(match as any).solicitud_conciliadaPor} matchNivel={(match as any).solicitud_matchNivel} /></td>
                     <td className="px-4 py-2.5">
-                      <span className="text-xs font-mono text-emerald-400">{match.codigoConfirmacion}</span>
+                      <span className="text-xs font-mono text-gold">{(match as any).solicitud_codigo || match.codigoConfirmacion}</span>
                     </td>
+                    <td className="px-4 py-2.5 text-blue-400/80 truncate max-w-[150px]">{(match as any).solicitud_clienteNombre || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -339,8 +348,8 @@ export function DashboardView() {
                 </div>
                 <p className="text-white text-sm truncate">{match.nombreOrdenante || '—'}</p>
                 <div className="flex items-center gap-2">
-                  <MatchTypeBadge matchType={match.matchType} />
-                  <span className="text-[10px] font-mono text-emerald-400">{match.codigoConfirmacion}</span>
+                  <MatchTypeBadge matchType={match.matchType} conciliadaPor={(match as any).solicitud_conciliadaPor} matchNivel={(match as any).solicitud_matchNivel} />
+                  <span className="text-[10px] font-mono text-gold">{(match as any).solicitud_codigo || match.codigoConfirmacion}</span>
                 </div>
               </div>
             ))}
