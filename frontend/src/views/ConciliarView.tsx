@@ -510,6 +510,16 @@ function SolicitudCard({
         <div className="flex items-center gap-2">
           <span className="text-gold font-mono font-medium">{c.codigo}</span>
           <span className="text-tertiary text-xs">{c.sedeId}</span>
+          {c.diasDiferencia !== null && c.diasDiferencia !== undefined && (
+            <span className={`px-2.5 py-0.5 rounded-full text-sm font-bold ${
+              c.diasDiferencia < 0 ? 'bg-red-500/20 text-red-400' :
+              c.diasDiferencia === 0 ? 'bg-blue-500/20 text-blue-400' :
+              c.diasDiferencia <= 2 ? 'bg-emerald-500/20 text-emerald-400' :
+              'bg-amber-500/20 text-amber-400'
+            }`}>
+              {c.diasDiferencia}
+            </span>
+          )}
         </div>
         <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-tertiary">
           Nivel {c.nivel} — {nivelLabels[c.nivel] || ''}
@@ -541,6 +551,10 @@ function SolicitudCard({
         <div>
           <span className="text-tertiary">Canal</span>
           <p className="text-secondary">{c.canalEmision || '—'}</p>
+        </div>
+        <div>
+          <span className="text-tertiary">Fecha{c.diasDiferencia !== null ? ` (${c.diasDiferencia}d)` : ''}</span>
+          <p className="text-secondary">{c.creadoAt ? displayFecha(new Date(c.creadoAt).toISOString()) : '—'}</p>
         </div>
         {c.reclamadaPor && (
           <div className="col-span-2">

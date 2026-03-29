@@ -29,7 +29,14 @@ const solicitudesQuerySchema = z.object({
   clienteNombre: z.string().optional(),
   fechaDesde: z.string().optional(),
   fechaHasta: z.string().optional(),
+  orderBy: z.string().optional(),
+  orderDir: z.enum(['asc', 'desc']).optional(),
 });
+
+const solicitudSortableColumns = [
+  'codigo', 'sedeId', 'clienteNombre', 'clienteCi', 'clienteCuenta',
+  'monto', 'workflowStatus', 'reconStatus', 'creadoAt', 'reclamadaPor',
+] as const;
 
 const confirmarSchema = z.object({
   solicitudId: z.number().int().min(1),
@@ -63,11 +70,12 @@ interface SolicitudCandidate {
   creadoAt: Date;
   reclamadaPor: string | null;
   nivel: number;
+  diasDiferencia: number | null;
 }
 
 function findSolicitudMatches(
   solicitudes: any[],
-  transfer: { importe: number; refOrigen: string; cuentaOrdenante: string; ciOrdenante: string; nombreOrdenante: string },
+  transfer: { importe: number; refOrigen: string; cuentaOrdenante: string; ciOrdenante: string; nombreOrdenante: string; fecha: Date },
 ): SolicitudCandidate[] {
   const candidates: SolicitudCandidate[] = [];
 
@@ -105,6 +113,9 @@ function findSolicitudMatches(
         creadoAt: sol.creadoAt,
         reclamadaPor: sol.reclamadaPor,
         nivel,
+        diasDiferencia: sol.creadoAt && transfer.fecha
+          ? Math.round((new Date(transfer.fecha).getTime() - new Date(sol.creadoAt).getTime()) / (1000 * 60 * 60 * 24))
+          : null,
       });
     }
   }
@@ -155,19 +166,32 @@ export async function conciliarRoutes(app: FastifyInstance) {
       if (q.fechaHasta) (where.creadoAt as any).lte = new Date(q.fechaHasta + 'T23:59:59Z');
     }
 
-    const [data, total] = await Promise.all([
+    const orderBy = q.orderBy && (solicitudSortableColumns as readonly string[]).includes(q.orderBy)
+      ? [{ [q.orderBy]: q.orderDir || 'desc' }, { id: 'desc' as const }]
+      : [{ creadoAt: 'desc' as const }, { id: 'desc' as const }];
+
+    const [data, total, aggregates] = await Promise.all([
       prisma.solicitud.findMany({
         where,
-        orderBy: [{ creadoAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip: (q.page - 1) * q.limit,
         take: q.limit,
       }),
       prisma.solicitud.count({ where }),
+      prisma.solicitud.aggregate({
+        where,
+        _sum: { monto: true },
+        _count: { id: true },
+      }),
     ]);
 
     return {
       data,
       pagination: { page: q.page, limit: q.limit, total, pages: Math.ceil(total / q.limit) },
+      totals: {
+        importe: Number(aggregates._sum.monto ?? 0),
+        cantidad: aggregates._count.id,
+      },
     };
   });
 
@@ -226,14 +250,14 @@ export async function conciliarRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: `Ya conciliada con solicitud ${transfer.solicitud.codigo}` });
     }
 
-    // Search unmatched solicitudes (claimed but not yet reconciled)
+    // Search unmatched solicitudes with matching amount
     const solicitudes = await prisma.solicitud.findMany({
       where: {
         reconStatus: { in: ['unmatched', 'suggested'] },
         workflowStatus: { not: 'cancelled' },
+        monto: transfer.importe,
       },
       orderBy: { creadoAt: 'desc' },
-      take: 100,
     });
 
     const candidates = findSolicitudMatches(solicitudes, {
@@ -242,6 +266,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
       cuentaOrdenante: transfer.cuentaOrdenante,
       ciOrdenante: transfer.ciOrdenante,
       nombreOrdenante: transfer.nombreOrdenante,
+      fecha: transfer.fecha,
     });
 
     return {

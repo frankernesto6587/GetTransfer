@@ -144,6 +144,7 @@ export function SolicitudesView() {
     setPage(1)
   }, [])
 
+  const sort = sorting[0]
   const { data, isLoading, isFetching } = useQuery({
     ...solicitudesQuery({
       page,
@@ -154,12 +155,22 @@ export function SolicitudesView() {
       clienteCi: debouncedCi || undefined,
       clienteCuenta: debouncedCuenta || undefined,
       sedeId: sedeId || undefined,
+      orderBy: sort?.id,
+      orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
     placeholderData: keepPreviousData,
   })
 
   const total = data?.pagination?.total ?? 0
   const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, sedeId].filter(Boolean).length
+
+  const pageData = data?.data ?? []
+  const pageTotals = pageData.length > 0
+    ? {
+        importe: pageData.reduce((sum, t) => sum + Number(t.monto), 0),
+        cantidad: pageData.length,
+      }
+    : undefined
 
   return (
     <div className="p-4 md:p-8">
@@ -219,6 +230,8 @@ export function SolicitudesView() {
             onRefresh={() => queryClient.invalidateQueries({ queryKey: ['solicitudes'] })}
             title="Solicitudes"
             loading={isFetching}
+            totals={data?.totals}
+            pageTotals={pageTotals}
           />
         </div>
       )}

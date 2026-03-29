@@ -329,6 +329,7 @@ export interface SolicitudCandidate {
   creadoAt: string
   reclamadaPor: string | null
   nivel: number
+  diasDiferencia: number | null
 }
 
 export interface ConciliarBuscarResponse {

@@ -7,9 +7,9 @@ import { Prisma } from '@prisma/client';
 // ── Zod schemas ──
 
 const solicitudFieldsSchema = z.object({
-  clienteNombre: z.string().min(1),
-  clienteCi: z.string().min(1),
-  clienteCuenta: z.string().min(1),
+  clienteNombre: z.string().default(''),
+  clienteCi: z.string().default(''),
+  clienteCuenta: z.string().default(''),
   clienteTelefono: z.string().optional().default(''),
   monto: z.number().positive(),
   canalEmision: z.string().optional().default(''),

@@ -144,6 +144,7 @@ export function TransferenciasOdooView() {
   const [canal, setCanal] = useState('')
   const [paymentType, setPaymentType] = useState('')
   const [matchStatus, setMatchStatus] = useState('')
+  const [codeStatus, setCodeStatus] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const debouncedNombre = useDebouncedValue(nombre)
@@ -179,7 +180,7 @@ export function TransferenciasOdooView() {
   const clearFilters = useCallback(() => {
     setNombre(''); setCi(''); setCuenta(''); setRefOrigen('')
     setGtCodigo(''); setTransferCode(''); setCanal('')
-    setPaymentType(''); setMatchStatus(''); setDesde(''); setHasta('')
+    setPaymentType(''); setMatchStatus(''); setCodeStatus(''); setDesde(''); setHasta('')
     setPage(1)
   }, [])
 
@@ -211,6 +212,7 @@ export function TransferenciasOdooView() {
       hasta: hasta ? Number(hasta) : undefined,
       paymentType: paymentType || undefined,
       matchStatus: matchStatus || undefined,
+      codeStatus: codeStatus || undefined,
       orderBy,
       orderDir,
     }),
@@ -218,7 +220,7 @@ export function TransferenciasOdooView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, matchStatus, desde, hasta].filter(Boolean).length
+  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedRefOrigen, debouncedGtCodigo, debouncedTransferCode, canal, paymentType, matchStatus, codeStatus, desde, hasta].filter(Boolean).length
 
   const pageData = data?.data ?? []
   const pageTotals = pageData.length > 0
@@ -293,6 +295,16 @@ export function TransferenciasOdooView() {
               options={[
                 { value: 'transfer', label: 'Transfer' },
                 { value: 'gettransfer', label: 'GetTransfer' },
+              ]}
+              className="w-full md:w-36"
+            />
+            <FilterSelect
+              value={codeStatus}
+              onChange={(v) => { setCodeStatus(v); setPage(1) }}
+              options={[
+                { value: 'valid', label: 'Code válido' },
+                { value: 'invalid', label: 'Code erróneo' },
+                { value: 'empty', label: 'Sin code' },
               ]}
               className="w-full md:w-36"
             />

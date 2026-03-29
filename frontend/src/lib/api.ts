@@ -372,6 +372,7 @@ export interface TransferenciasOdooParams {
   hasta?: number
   paymentType?: string
   matchStatus?: string
+  codeStatus?: string
   orderBy?: string
   orderDir?: 'asc' | 'desc'
 }
@@ -393,6 +394,7 @@ export function buildTransferenciasOdooUrl(params: TransferenciasOdooParams): st
   if (params.hasta) sp.set('hasta', String(params.hasta))
   if (params.paymentType) sp.set('paymentType', params.paymentType)
   if (params.matchStatus) sp.set('matchStatus', params.matchStatus)
+  if (params.codeStatus) sp.set('codeStatus', params.codeStatus)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
   if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
@@ -653,6 +655,8 @@ export interface SolicitudesParams {
   clienteNombre?: string
   fechaDesde?: string
   fechaHasta?: string
+  orderBy?: string
+  orderDir?: 'asc' | 'desc'
 }
 
 export function buildSolicitudesUrl(params: SolicitudesParams): string {
@@ -665,6 +669,8 @@ export function buildSolicitudesUrl(params: SolicitudesParams): string {
   if (params.clienteNombre) sp.set('clienteNombre', params.clienteNombre)
   if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
+  if (params.orderBy) sp.set('orderBy', params.orderBy)
+  if (params.orderDir) sp.set('orderDir', params.orderDir)
   const qs = sp.toString()
   return `/api/solicitudes${qs ? `?${qs}` : ''}`
 }
