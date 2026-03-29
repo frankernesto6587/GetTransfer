@@ -305,6 +305,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
         conciliadaAt: new Date(),
         conciliadaPor: user?.name || 'system',
         matchNivel: body.matchNivel || null,
+        sedeNotified: false,
       },
       include: { transferencia: true },
     });

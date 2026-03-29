@@ -180,6 +180,7 @@ model Solicitud {
   // Sync
   syncReceivedAt    DateTime  @default(now())
   lastEventId       String?
+  sedeNotified      Boolean   @default(false)
 
   @@index([workflowStatus])
   @@index([reconStatus])

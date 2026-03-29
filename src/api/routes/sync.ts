@@ -466,6 +466,65 @@ export async function syncRoutes(app: FastifyInstance) {
     };
   });
 
+  // ── Pull updates: solicitudes matched but not yet notified to sede ──
+  app.get('/api/sync/updates', async (request, reply) => {
+    const sede = (request as any).sede;
+
+    const updated = await prisma.solicitud.findMany({
+      where: {
+        sedeId: sede.prefix,
+        reconStatus: 'matched',
+        sedeNotified: false,
+      },
+      include: { transferencia: true },
+      take: 50,
+    });
+
+    return {
+      updates: updated.map(s => ({
+        codigo: s.codigo,
+        reconStatus: s.reconStatus,
+        conciliadaAt: s.conciliadaAt?.toISOString() || null,
+        conciliadaPor: s.conciliadaPor,
+        matchNivel: s.matchNivel,
+        // Bank transfer data for writing gt_* fields
+        transferencia: s.transferencia ? {
+          nombreOrdenante: s.transferencia.nombreOrdenante,
+          ciOrdenante: s.transferencia.ciOrdenante,
+          cuentaOrdenante: s.transferencia.cuentaOrdenante,
+          canalEmision: s.transferencia.canalEmision,
+          refCorriente: s.transferencia.refCorriente,
+          refOrigen: s.transferencia.refOrigen,
+          fecha: s.transferencia.fecha.toISOString().slice(0, 10),
+          importe: s.transferencia.importe,
+        } : null,
+      })),
+    };
+  });
+
+  // ── Ack updates: sede confirms it processed the updates ──
+  app.post('/api/sync/ack-updates', async (request, reply) => {
+    const sede = (request as any).sede;
+    const body = z.object({
+      codigos: z.array(z.string()).min(1),
+    }).safeParse(request.body);
+
+    if (!body.success) {
+      return reply.status(400).send({ error: 'codigos array required' });
+    }
+
+    const result = await prisma.solicitud.updateMany({
+      where: {
+        codigo: { in: body.data.codigos },
+        sedeId: sede.prefix,
+        reconStatus: 'matched',
+      },
+      data: { sedeNotified: true },
+    });
+
+    return { acknowledged: result.count };
+  });
+
   // ── Health check (sede pings this) ──
   app.get('/api/sync/health', async () => {
     return { ok: true, timestamp: new Date().toISOString() };
