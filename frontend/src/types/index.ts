@@ -312,6 +312,7 @@ export interface Solicitud {
 export interface SolicitudesResponse {
   data: Solicitud[]
   pagination: PaginationInfo
+  totals?: TotalsInfo
 }
 
 export interface SolicitudCandidate {
