@@ -749,7 +749,7 @@ export async function accionConciliar(transferenciaId: number, accion: 'CONFIRME
 }
 
 export async function getSyncMetrics(): Promise<SyncMetrics> {
-  const res = await apiFetch('/api/sync/metrics')
+  const res = await apiFetch('/api/solicitudes/sync-metrics')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }

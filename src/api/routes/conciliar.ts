@@ -151,6 +151,27 @@ function nameSimilarity(a: string, b: string): number {
 export async function conciliarRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('admin', 'confirmer'));
 
+  // ── Sync metrics (for SyncDashboardView — uses JWT auth, not sede auth) ──
+  app.get('/api/solicitudes/sync-metrics', async () => {
+    const [solicitudes, events, bySede] = await Promise.all([
+      prisma.solicitud.groupBy({
+        by: ['workflowStatus', 'reconStatus'],
+        _count: true,
+      }),
+      prisma.solicitudEvent.groupBy({
+        by: ['sedeId'],
+        _count: true,
+        _max: { receivedAt: true },
+      }),
+      prisma.solicitud.groupBy({
+        by: ['sedeId', 'workflowStatus'],
+        _count: true,
+        _sum: { monto: true },
+      }),
+    ]);
+    return { solicitudes, events, bySede };
+  });
+
   // ── List ALL solicitudes (for SolicitudesView) ──
   app.get('/api/solicitudes', async (request) => {
     const q = solicitudesQuerySchema.parse(request.query);
