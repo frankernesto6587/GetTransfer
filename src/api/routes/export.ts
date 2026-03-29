@@ -20,7 +20,8 @@ const querySchema = z.object({
 
 const CSV_COLUMNS = [
   'fecha_banco', 'fecha_solicitud', 'nombre_banco', 'nombre_solicitud',
-  'codigo_banco', 'codigo_solicitud', 'cuenta_banco', 'cuenta_solicitud',
+  'codigo_banco', 'codigo_solicitud', 'codigo_gt',
+  'cuenta_banco', 'cuenta_solicitud',
   'ci_banco', 'ci_solicitud', 'monto_banco', 'monto_solicitud',
   'canal_banco', 'sede', 'match_nivel', 'conciliado_por', 'reclamada_por',
 ];
@@ -66,7 +67,8 @@ export async function exportRoutes(app: FastifyInstance) {
         nombre_banco: t?.nombreOrdenante ?? '',
         nombre_solicitud: sol.clienteNombre,
         codigo_banco: t?.refOrigen ?? '',
-        codigo_solicitud: sol.codigo,
+        codigo_solicitud: sol.transferCode ?? '',
+        codigo_gt: sol.codigo,
         cuenta_banco: t?.cuentaOrdenante ?? '',
         cuenta_solicitud: sol.clienteCuenta,
         ci_banco: t?.ciOrdenante ?? '',
