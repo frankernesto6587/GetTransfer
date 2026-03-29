@@ -713,20 +713,35 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
   const recentMatches = recentMatchSolicitudes.map(sol => {
     const t = sol.transferencia;
     return {
+      // Transferencia banco
       id: t?.id ?? sol.id,
       fecha: t?.fecha ?? null,
       refOrigen: t?.refOrigen ?? '',
+      refCorriente: t?.refCorriente ?? '',
       importe: t?.importe ?? 0,
       tipo: t?.tipo ?? 'Cr',
       nombreOrdenante: t?.nombreOrdenante ?? '',
+      ciOrdenante: t?.ciOrdenante ?? '',
+      cuentaOrdenante: t?.cuentaOrdenante ?? '',
+      tarjetaOrdenante: t?.tarjetaOrdenante ?? '',
       canalEmision: t?.canalEmision ?? '',
       codigoConfirmacion: sol.codigo,
       confirmedAt: sol.conciliadaAt,
+      confirmedBy: sol.conciliadaPor,
       matchType: sol.conciliadaPor === 'auto' ? 'CONFIRMED_AUTO' : (sol.matchNivel ? `MANUAL_L${sol.matchNivel}` : null),
+      // Solicitud
       solicitud_codigo: sol.codigo,
       solicitud_clienteNombre: sol.clienteNombre,
+      solicitud_clienteCi: sol.clienteCi,
+      solicitud_clienteCuenta: sol.clienteCuenta,
+      solicitud_monto: Number(sol.monto),
+      solicitud_canalEmision: sol.canalEmision,
+      solicitud_transferCode: sol.transferCode,
       solicitud_sedeId: sol.sedeId,
+      solicitud_creadoAt: sol.creadoAt,
+      solicitud_reclamadaPor: sol.reclamadaPor,
       solicitud_matchNivel: sol.matchNivel,
+      solicitud_conciliadaAt: sol.conciliadaAt,
       solicitud_conciliadaPor: sol.conciliadaPor,
     };
   });
