@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, User, Hash, Wallet, Code, DollarSign, Eye, WifiOff, Download } from 'lucide-react'
+import { Calendar, User, Hash, Wallet, Code, DollarSign, Eye, Download } from 'lucide-react'
 import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -21,8 +21,8 @@ function firstOfMonth() {
 }
 
 const MATCH_TYPE_OPTIONS = [
-  { value: 'CONFIRMED_AUTO', label: 'Auto' },
-  { value: 'CONFIRMED_MANUAL', label: 'Manual (todos)' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'manual', label: 'Manual (todos)' },
   { value: 'CONFIRMED_DEPOSIT', label: 'Deposito' },
   { value: 'CONFIRMED_BUY', label: 'Compra' },
   { value: 'REVIEW_REQUIRED', label: 'Revision' },
@@ -52,15 +52,28 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
   REVIEW_REQUIRED: 'Revision',
 }
 
-function MatchTypeBadge({ matchType }: { matchType: string | null }) {
-  if (!matchType) return <span className="text-tertiary">—</span>
-  const colorClass = MATCH_TYPE_COLORS[matchType] || 'bg-white/10 text-secondary'
-  const label = MATCH_TYPE_LABELS[matchType] || matchType
-  return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${colorClass}`}>
-      {label}
-    </span>
-  )
+function MatchTypeBadge({ matchType, conciliadaPor, matchNivel }: { matchType: string | null; conciliadaPor?: string | null; matchNivel?: number | null }) {
+  // New flow: use conciliadaPor + matchNivel
+  if (conciliadaPor === 'auto') {
+    return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-emerald-500/15 text-emerald-400">Auto</span>
+  }
+  if (matchNivel) {
+    const nivelColors: Record<number, string> = {
+      1: 'bg-blue-500/15 text-blue-400',
+      2: 'bg-blue-500/15 text-blue-400',
+      3: 'bg-cyan-500/15 text-cyan-400',
+      4: 'bg-cyan-500/15 text-cyan-400',
+      5: 'bg-cyan-500/15 text-cyan-400',
+    }
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${nivelColors[matchNivel] || 'bg-white/10 text-secondary'}`}>Manual L{matchNivel}</span>
+  }
+  // Legacy: use matchType from transferencia
+  if (matchType) {
+    const colorClass = MATCH_TYPE_COLORS[matchType] || 'bg-white/10 text-secondary'
+    const label = MATCH_TYPE_LABELS[matchType] || matchType
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${colorClass}`}>{label}</span>
+  }
+  return <span className="text-tertiary">—</span>
 }
 
 const col = createColumnHelper<MatchedTransfer>()
@@ -87,7 +100,10 @@ function makeColumns(onView: (t: MatchedTransfer) => void) {
     }),
     col.accessor('matchType', {
       header: 'Tipo',
-      cell: (info) => <MatchTypeBadge matchType={info.getValue()} />,
+      cell: (info) => {
+        const row = info.row.original
+        return <MatchTypeBadge matchType={info.getValue()} conciliadaPor={row.solicitud_conciliadaPor} matchNivel={row.solicitud_matchNivel} />
+      },
     }),
     col.accessor('importe', {
       header: 'Monto',
@@ -106,30 +122,31 @@ function makeColumns(onView: (t: MatchedTransfer) => void) {
       header: 'Fecha GT',
       cell: (info) => <span className="text-secondary whitespace-nowrap text-xs font-mono">{displayFecha(info.getValue())}</span>,
     }),
-    col.accessor('odoo_order_date', {
-      header: 'Fecha Odoo',
-      enableSorting: false,
+    col.accessor('solicitud_creadoAt', {
+      header: 'Fecha Solicitud',
       cell: (info) => {
         const v = info.getValue()
-        return v
-          ? <span className="text-blue-400/80 whitespace-nowrap text-xs font-mono">{displayFecha(v)}</span>
-          : <span className="text-tertiary">—</span>
+        if (!v) return <span className="text-tertiary">—</span>
+        return <span className="text-blue-400/80 whitespace-nowrap text-xs font-mono">{new Date(v).toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
       },
     }),
     col.accessor('nombreOrdenante', {
-      header: 'Ordenante GT',
+      header: 'Ordenante Banco',
       cell: (info) => {
         const name = info.getValue() || '—'
         return <span className="text-white whitespace-nowrap max-w-[150px] truncate block text-sm" title={name}>{name}</span>
       },
     }),
-    col.accessor('odoo_card_holder_name', {
-      header: 'Ordenante Odoo',
-      enableSorting: false,
+    col.accessor('solicitud_clienteNombre', {
+      header: 'Cliente Solicitud',
       cell: (info) => {
         const name = info.getValue() || '—'
         return <span className="text-blue-400/80 whitespace-nowrap max-w-[150px] truncate block text-sm" title={name}>{name}</span>
       },
+    }),
+    col.accessor('solicitud_sedeId', {
+      header: 'Sede',
+      cell: (info) => <span className="text-secondary text-xs">{info.getValue() || '—'}</span>,
     }),
     col.display({
       id: 'actions',
@@ -231,7 +248,7 @@ export function MatchesView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const odooAvailable = data?.odooAvailable ?? true
+  // const odooAvailable removed — data comes from GT central only
   const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, debouncedCodigo, canal, matchType, desde, hasta].filter(Boolean).length
 
   const allData = data?.data ?? []
@@ -267,14 +284,6 @@ export function MatchesView() {
           ) : 'Sin matches para los filtros seleccionados'}
         </p>
       </div>
-
-      {/* Odoo unavailable warning */}
-      {!odooAvailable && allData.length > 0 && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
-          <WifiOff size={16} />
-          <span>Datos de Odoo no disponibles temporalmente. Las columnas de Odoo se muestran vacias.</span>
-        </div>
-      )}
 
       {/* Summary cards */}
       {allData.length > 0 && (
@@ -395,7 +404,7 @@ export function MatchesView() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm truncate" title={item.nombreOrdenante || undefined}>{item.nombreOrdenante || '—'}</div>
-                    <div className="text-blue-400/70 text-xs truncate" title={item.odoo_card_holder_name || undefined}>{item.odoo_card_holder_name || '—'}</div>
+                    <div className="text-blue-400/70 text-xs truncate" title={item.solicitud_clienteNombre || undefined}>{item.solicitud_clienteNombre || '—'}</div>
                   </div>
                   <span className={`font-mono font-medium shrink-0 ${item.tipo === 'Cr' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {item.tipo === 'Cr' ? '+' : '-'}${formatCurrency(item.importe)}
@@ -404,7 +413,7 @@ export function MatchesView() {
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="text-tertiary">GT: {displayFecha(item.fecha)}</span>
-                    <span className="text-blue-400/60">Odoo: {item.odoo_order_date ? displayFecha(item.odoo_order_date) : '—'}</span>
+                    <span className="text-blue-400/60">Sol: {item.solicitud_creadoAt ? new Date(item.solicitud_creadoAt).toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit' }) : '—'}</span>
                   </div>
                   <CanalBadge canal={item.canalEmision} />
                 </div>

@@ -149,7 +149,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
             <div className="grid grid-cols-[1fr_auto] gap-x-2 mb-2">
               <div className="grid grid-cols-2 gap-3">
                 <h4 className="text-xs uppercase tracking-wider text-emerald-400 font-medium">GT (BANDEC)</h4>
-                <h4 className="text-xs uppercase tracking-wider text-blue-400 font-medium">Odoo</h4>
+                <h4 className="text-xs uppercase tracking-wider text-blue-400 font-medium">Solicitud</h4>
               </div>
               <div className="w-5" />
             </div>
@@ -165,7 +165,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
               <CompareRow
                 gtValue={match.fecha ? displayFecha(match.fecha) : null}
-                odooValue={match.odoo_order_date ? displayFecha(match.odoo_order_date) : null}
+                odooValue={match.solicitud_creadoAt ? new Date(match.solicitud_creadoAt).toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null}
                 mono
               />
 
@@ -178,7 +178,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
               <CompareRow
                 gtValue={match.nombreOrdenante}
-                odooValue={match.odoo_card_holder_name}
+                odooValue={match.solicitud_clienteNombre}
               />
 
               <div className="grid grid-cols-[1fr_auto] gap-x-2 py-2 border-b border-border/30 mt-1">
@@ -190,7 +190,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
               <CompareRow
                 gtValue={match.ciOrdenante}
-                odooValue={match.odoo_card_holder_ci}
+                odooValue={match.solicitud_clienteCi}
                 mono
               />
 
@@ -203,7 +203,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
               <CompareRow
                 gtValue={match.cuentaOrdenante}
-                odooValue={match.odoo_card_number}
+                odooValue={match.solicitud_clienteCuenta}
                 mono
               />
 
@@ -216,7 +216,7 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
               <CompareRow
                 gtValue={match.refOrigen}
-                odooValue={match.odoo_transfer_code}
+                odooValue={match.solicitud_transferCode}
                 mono
               />
             </div>
@@ -247,25 +247,25 @@ export function MatchDetailModal({ match, onClose, onRefresh }: {
               </div>
             </div>
 
-            {/* Odoo-only fields */}
+            {/* Solicitud-only fields */}
             <div>
-              <h4 className="text-xs uppercase tracking-wider text-blue-400/70 mb-2 font-medium">Solo Odoo</h4>
+              <h4 className="text-xs uppercase tracking-wider text-blue-400/70 mb-2 font-medium">Solicitud</h4>
               <div className="bg-page rounded-lg px-4 py-1">
                 <div className="flex justify-between items-center py-2 border-b border-border/30">
-                  <span className="text-secondary text-sm">Orden</span>
-                  <span className="text-white text-sm font-mono">{match.odoo_order_name || '—'}</span>
+                  <span className="text-secondary text-sm">Código</span>
+                  <span className="text-gold text-sm font-mono">{match.solicitud_codigo || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-border/30">
-                  <span className="text-secondary text-sm">Sesion</span>
-                  <span className="text-white text-sm">{match.odoo_session_name || '—'}</span>
+                  <span className="text-secondary text-sm">Sede</span>
+                  <span className="text-white text-sm">{match.solicitud_sedeId || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-border/30">
-                  <span className="text-secondary text-sm">Tipo Pago</span>
-                  <span className="text-white text-sm">{match.odoo_payment_type || '—'}</span>
+                  <span className="text-secondary text-sm">Reclamada por</span>
+                  <span className="text-white text-sm">{match.solicitud_reclamadaPor || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-secondary text-sm">Reclamada</span>
-                  <span className="text-white text-sm font-mono">{match.claimedAt ? formatDate(match.claimedAt) : '—'}</span>
+                  <span className="text-secondary text-sm">Conciliada</span>
+                  <span className="text-white text-sm font-mono">{match.solicitud_conciliadaAt ? formatDate(match.solicitud_conciliadaAt) : '—'}</span>
                 </div>
               </div>
             </div>

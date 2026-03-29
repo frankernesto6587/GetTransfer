@@ -1,36 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import * as repo from '../../db/repository';
 import { prisma } from '../../db/repository';
 import { requireRole } from '../middleware/auth';
-
-async function odooFetch(path: string, body: Record<string, unknown>) {
-  const config = await repo.getOdooConfig();
-  if (!config.api_url || !config.api_key) return null;
-
-  const res = await fetch(`${config.api_url}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': config.api_key,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
-async function odooFetchWithTimeout(path: string, body: Record<string, unknown>, timeoutMs = 5000) {
-  try {
-    const result = await Promise.race([
-      odooFetch(path, body),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
-    ]);
-    return result;
-  } catch {
-    return null;
-  }
-}
+import { Prisma } from '@prisma/client';
 
 const querySchema = z.object({
   fechaDesde: z.string().optional(),
@@ -49,6 +21,11 @@ const querySchema = z.object({
   orderDir: z.enum(['asc', 'desc']).optional(),
 });
 
+const sortableColumns = [
+  'conciliadaAt', 'codigo', 'matchNivel', 'monto',
+  'creadoAt', 'clienteNombre', 'clienteCi', 'sedeId',
+] as const;
+
 export async function matchesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireRole('admin', 'confirmer'));
 
@@ -60,126 +37,152 @@ export async function matchesRoutes(app: FastifyInstance) {
 
     const q = parsed.data;
 
-    // 1. Build base where for stats (same filters, no pagination)
-    const baseWhere: any = { codigoConfirmacion: { not: null } };
+    // Build WHERE for Solicitud with reconStatus = matched
+    const where: Prisma.SolicitudWhereInput = {
+      reconStatus: 'matched',
+      transferenciaId: { not: null },
+    };
+
+    // Filters on transferencia fields
+    const transferWhere: Prisma.TransferenciaWhereInput = {};
     if (q.fechaDesde || q.fechaHasta) {
-      baseWhere.fecha = {};
-      if (q.fechaDesde) baseWhere.fecha.gte = new Date(q.fechaDesde + 'T00:00:00Z');
-      if (q.fechaHasta) baseWhere.fecha.lte = new Date(q.fechaHasta + 'T23:59:59Z');
+      transferWhere.fecha = {};
+      if (q.fechaDesde) (transferWhere.fecha as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');
+      if (q.fechaHasta) (transferWhere.fecha as any).lte = new Date(q.fechaHasta + 'T23:59:59Z');
     }
-    if (q.nombre) baseWhere.nombreOrdenante = { contains: q.nombre, mode: 'insensitive' };
-    if (q.ci) baseWhere.ciOrdenante = { contains: q.ci, mode: 'insensitive' };
-    if (q.cuenta) baseWhere.cuentaOrdenante = { contains: q.cuenta, mode: 'insensitive' };
-    if (q.codigo) baseWhere.codigoConfirmacion = { not: null, contains: q.codigo, mode: 'insensitive' };
-    if (q.canal) baseWhere.canalEmision = { contains: q.canal, mode: 'insensitive' };
-    if (q.matchType) {
-      if (q.matchType === 'CONFIRMED_MANUAL') {
-        baseWhere.matchType = { startsWith: 'CONFIRMED_MANUAL' };
-      } else {
-        baseWhere.matchType = q.matchType;
-      }
+    if (q.nombre) {
+      where.OR = [
+        { clienteNombre: { contains: q.nombre, mode: 'insensitive' } },
+        { transferencia: { nombreOrdenante: { contains: q.nombre, mode: 'insensitive' } } },
+      ];
     }
+    if (q.ci) {
+      where.OR = [
+        ...(where.OR || []),
+        { clienteCi: { contains: q.ci, mode: 'insensitive' } },
+        { transferencia: { ciOrdenante: { contains: q.ci, mode: 'insensitive' } } },
+      ];
+    }
+    if (q.cuenta) {
+      where.OR = [
+        ...(where.OR || []),
+        { clienteCuenta: { contains: q.cuenta, mode: 'insensitive' } },
+        { transferencia: { cuentaOrdenante: { contains: q.cuenta, mode: 'insensitive' } } },
+      ];
+    }
+    if (q.codigo) where.codigo = { contains: q.codigo, mode: 'insensitive' };
+    if (q.canal) where.canalEmision = { contains: q.canal, mode: 'insensitive' };
     if (q.desde !== undefined || q.hasta !== undefined) {
-      baseWhere.importe = {};
-      if (q.desde !== undefined) baseWhere.importe.gte = q.desde;
-      if (q.hasta !== undefined) baseWhere.importe.lte = q.hasta;
+      where.monto = {};
+      if (q.desde !== undefined) (where.monto as any).gte = q.desde;
+      if (q.hasta !== undefined) (where.monto as any).lte = q.hasta;
     }
 
-    // 2. Query local DB for matched transfers + stats
-    const gtResult = await repo.getAll({
-      estado: 'matched',
-      matchType: q.matchType || undefined,
-      fechaDesde: q.fechaDesde,
-      fechaHasta: q.fechaHasta,
-      nombre: q.nombre,
-      ci: q.ci,
-      cuenta: q.cuenta,
-      codigo: q.codigo,
-      canal: q.canal,
-      desde: q.desde,
-      hasta: q.hasta,
-      page: q.page,
-      limit: q.limit,
-      orderBy: q.orderBy,
-      orderDir: q.orderDir,
-    });
-
-    // 2a. Stats by matchType (full dataset, not paginated)
-    const statsRaw = await prisma.transferencia.groupBy({
-      by: ['matchType'],
-      where: baseWhere,
-      _count: { id: true },
-    });
-
-    const statsByType = { auto: 0, manual: 0, deposito: 0, compra: 0, revision: 0 };
-    for (const row of statsRaw) {
-      const mt = row.matchType || '';
-      if (mt === 'CONFIRMED_AUTO') statsByType.auto = row._count.id;
-      else if (mt.startsWith('CONFIRMED_MANUAL')) statsByType.manual += row._count.id;
-      else if (mt === 'CONFIRMED_DEPOSIT') statsByType.deposito = row._count.id;
-      else if (mt === 'CONFIRMED_BUY') statsByType.compra = row._count.id;
-      else if (mt === 'REVIEW_REQUIRED') statsByType.revision = row._count.id;
-    }
-
-    // 2b. Extract GT codes from current page
-    const gtCodes = gtResult.data
-      .map((t: any) => t.codigoConfirmacion)
-      .filter(Boolean) as string[];
-
-    // 3. Fetch Odoo data in a single bulk request
-    let odooAvailable = false;
-    const odooMap = new Map<string, any>();
-
-    if (gtCodes.length > 0) {
-      const bulkResult = await odooFetchWithTimeout(
-        '/api/pos/gettransfer/bulk-by-codes',
-        { gt_codigos: gtCodes },
-        15000,
-      );
-
-      if (bulkResult?.data) {
-        odooAvailable = true;
-        // Index by gt_codigo
-        for (const item of bulkResult.data) {
-          if (item.gt_codigo) {
-            odooMap.set(item.gt_codigo, item);
-          }
-        }
-
-        // Fallback: for unmatched GTs, try matching by transfer_code = refOrigen
-        // using the data already fetched
-        for (const gt of gtResult.data) {
-          if (gt.codigoConfirmacion && !odooMap.has(gt.codigoConfirmacion) && gt.refOrigen) {
-            const match = bulkResult.data.find((item: any) => item.transfer_code === gt.refOrigen);
-            if (match) {
-              odooMap.set(gt.codigoConfirmacion, match);
-            }
-          }
-        }
+    // matchType filter
+    if (q.matchType) {
+      if (q.matchType === 'auto') {
+        where.conciliadaPor = 'auto';
+      } else if (q.matchType === 'manual') {
+        where.matchNivel = { not: null };
+        where.conciliadaPor = { not: 'auto' };
+      } else if (q.matchType === 'CONFIRMED_DEPOSIT' || q.matchType === 'CONFIRMED_BUY' || q.matchType === 'REVIEW_REQUIRED') {
+        where.transferencia = { ...transferWhere, matchType: q.matchType };
       }
     }
 
-    // 4. Merge GT + Odoo data
-    const mergedData = gtResult.data.map((gt: any) => {
-      const odoo = gt.codigoConfirmacion ? odooMap.get(gt.codigoConfirmacion) : null;
+    // Apply transferencia date filter if set
+    if (Object.keys(transferWhere).length > 0 && !where.transferencia) {
+      where.transferencia = transferWhere;
+    } else if (Object.keys(transferWhere).length > 0 && where.transferencia) {
+      where.transferencia = { ...(where.transferencia as any), ...transferWhere };
+    }
+
+    // Sorting
+    const orderBy = q.orderBy && (sortableColumns as readonly string[]).includes(q.orderBy)
+      ? [{ [q.orderBy]: q.orderDir || 'desc' }, { id: 'desc' as const }]
+      : [{ conciliadaAt: 'desc' as const }, { id: 'desc' as const }];
+
+    // Query
+    const [data, total, aggregates] = await Promise.all([
+      prisma.solicitud.findMany({
+        where,
+        include: { transferencia: true },
+        orderBy,
+        skip: (q.page - 1) * q.limit,
+        take: q.limit,
+      }),
+      prisma.solicitud.count({ where }),
+      prisma.solicitud.aggregate({
+        where,
+        _sum: { monto: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    // Stats by type (full dataset, no pagination)
+    const [autoCount, manualCount, depositCount, buyCount, reviewCount] = await Promise.all([
+      prisma.solicitud.count({ where: { ...where, conciliadaPor: 'auto' } }),
+      prisma.solicitud.count({ where: { ...where, matchNivel: { not: null }, conciliadaPor: { not: 'auto' } } }),
+      prisma.solicitud.count({ where: { ...where, transferencia: { matchType: 'CONFIRMED_DEPOSIT' } } }),
+      prisma.solicitud.count({ where: { ...where, transferencia: { matchType: 'CONFIRMED_BUY' } } }),
+      prisma.solicitud.count({ where: { ...where, transferencia: { matchType: 'REVIEW_REQUIRED' } } }),
+    ]);
+
+    const statsByType = {
+      auto: autoCount,
+      manual: manualCount,
+      deposito: depositCount,
+      compra: buyCount,
+      revision: reviewCount,
+    };
+
+    // Merge into flat objects
+    const mergedData = data.map(sol => {
+      const t = sol.transferencia;
       return {
-        ...gt,
-        odoo_order_date: odoo?.order_date ?? null,
-        odoo_order_name: odoo?.order_name ?? null,
-        odoo_card_holder_name: odoo?.card_holder_name ?? null,
-        odoo_card_holder_ci: odoo?.card_holder_ci ?? null,
-        odoo_card_number: odoo?.card_number ?? null,
-        odoo_payment_type: odoo?.payment_type ?? null,
-        odoo_session_name: odoo?.session_name ?? null,
-        odoo_transfer_code: odoo?.transfer_code ?? null,
+        // Transfer banco
+        id: t?.id ?? sol.id,
+        fecha: t?.fecha ?? null,
+        refOrigen: t?.refOrigen ?? '',
+        refCorriente: t?.refCorriente ?? '',
+        importe: t?.importe ?? 0,
+        tipo: t?.tipo ?? '',
+        nombreOrdenante: t?.nombreOrdenante ?? '',
+        ciOrdenante: t?.ciOrdenante ?? '',
+        cuentaOrdenante: t?.cuentaOrdenante ?? '',
+        canalEmision: t?.canalEmision ?? '',
+        matchType: t?.matchType ?? null,
+        codigoConfirmacion: sol.codigo,
+        confirmedAt: sol.conciliadaAt,
+        // Solicitud
+        solicitud_codigo: sol.codigo,
+        solicitud_clienteNombre: sol.clienteNombre,
+        solicitud_clienteCi: sol.clienteCi,
+        solicitud_clienteCuenta: sol.clienteCuenta,
+        solicitud_monto: Number(sol.monto),
+        solicitud_canalEmision: sol.canalEmision,
+        solicitud_transferCode: sol.transferCode,
+        solicitud_sedeId: sol.sedeId,
+        solicitud_creadoAt: sol.creadoAt,
+        solicitud_reclamadaPor: sol.reclamadaPor,
+        solicitud_matchNivel: sol.matchNivel,
+        solicitud_conciliadaAt: sol.conciliadaAt,
+        solicitud_conciliadaPor: sol.conciliadaPor,
       };
     });
 
     return {
       data: mergedData,
-      pagination: gtResult.pagination,
-      totals: gtResult.totals,
-      odooAvailable,
+      pagination: {
+        page: q.page,
+        limit: q.limit,
+        total,
+        pages: Math.ceil(total / q.limit),
+      },
+      totals: {
+        importe: Number(aggregates._sum.monto ?? 0),
+        cantidad: aggregates._count.id,
+      },
       statsByType,
     };
   });

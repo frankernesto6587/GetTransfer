@@ -219,24 +219,28 @@ export type TransferDetailData =
   | { source: 'bandec'; data: Transferencia }
   | { source: 'odoo'; data: TransferenciaOdooItem }
 
-// ── Matches (GT + Odoo combined) ──
+// ── Matches (Banco + Solicitud) ──
 
 export interface MatchedTransfer extends Transferencia {
-  odoo_order_date: string | null
-  odoo_order_name: string | null
-  odoo_card_holder_name: string | null
-  odoo_card_holder_ci: string | null
-  odoo_card_number: string | null
-  odoo_payment_type: string | null
-  odoo_session_name: string | null
-  odoo_transfer_code: string | null
+  solicitud_codigo: string | null
+  solicitud_clienteNombre: string | null
+  solicitud_clienteCi: string | null
+  solicitud_clienteCuenta: string | null
+  solicitud_monto: number | null
+  solicitud_canalEmision: string | null
+  solicitud_transferCode: string | null
+  solicitud_sedeId: string | null
+  solicitud_creadoAt: string | null
+  solicitud_reclamadaPor: string | null
+  solicitud_matchNivel: number | null
+  solicitud_conciliadaAt: string | null
+  solicitud_conciliadaPor: string | null
 }
 
 export interface MatchesResponse {
   data: MatchedTransfer[]
   pagination: PaginationInfo
   totals?: TotalsInfo
-  odooAvailable: boolean
   statsByType: { auto: number; manual: number; deposito: number; compra: number; revision: number }
 }
 
