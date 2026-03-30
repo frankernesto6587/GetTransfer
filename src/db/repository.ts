@@ -741,6 +741,7 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     aggPendientes,
     dailyGt,
     recentMatchSolicitudes,
+    dailyMatches,
   ] = await Promise.all([
     // GT Totals
     prisma.transferencia.aggregate({ where: dateWhere, _sum: { importe: true }, _count: { id: true } }),
@@ -761,6 +762,15 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
       orderBy: { conciliadaAt: 'desc' },
       take: 15,
     }),
+    // Daily match totals (all matched solicitudes grouped by transferencia fecha)
+    prisma.$queryRaw<{ fecha: Date; total: bigint | number }[]>`
+      SELECT t.fecha, SUM(s.monto)::bigint as total
+      FROM "Solicitud" s
+      JOIN "Transferencia" t ON s."transferenciaId" = t.id
+      WHERE s."reconStatus" = 'matched'
+      GROUP BY t.fecha
+      ORDER BY t.fecha ASC
+    `,
   ]);
 
   // Build match stats
@@ -819,14 +829,11 @@ export async function getDashboardData(filters: DashboardFilters = {}) {
     if (row.tipo === 'Cr') entry.gtCreditos = row._sum.importe ?? 0;
     else if (row.tipo === 'Db') entry.gtDebitos = row._sum.importe ?? 0;
   }
-  // Add match amounts from recent matched solicitudes (by transferencia fecha)
-  for (const sol of recentMatchSolicitudes) {
-    if (sol.transferencia?.fecha) {
-      const key = sol.transferencia.fecha.toISOString().slice(0, 10);
-      if (dayMap.has(key)) {
-        dayMap.get(key)!.matchImporte += Number(sol.monto);
-      }
-    }
+  // Add match amounts from ALL matched solicitudes grouped by transferencia fecha
+  for (const row of dailyMatches) {
+    const key = row.fecha.toISOString().slice(0, 10);
+    if (!dayMap.has(key)) dayMap.set(key, { fecha: key, gtCreditos: 0, gtDebitos: 0, matchImporte: 0 });
+    dayMap.get(key)!.matchImporte = Number(row.total);
   }
   const porDia = Array.from(dayMap.values()).sort((a, b) => a.fecha.localeCompare(b.fecha));
 
