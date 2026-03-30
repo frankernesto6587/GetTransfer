@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle } from 'lucide-react'
+import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle, Code } from 'lucide-react'
 import { FilterBar, FilterInput, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -117,9 +117,11 @@ export function SolicitudesView() {
   const [ci, setCi] = useState('')
   const [cuenta, setCuenta] = useState('')
   const [sedeId, setSedeId] = useState('')
+  const [transferCode, setTransferCode] = useState('')
   const debouncedNombre = useDebouncedValue(nombre)
   const debouncedCi = useDebouncedValue(ci)
   const debouncedCuenta = useDebouncedValue(cuenta)
+  const debouncedTransferCode = useDebouncedValue(transferCode)
 
   const applyPreset = useCallback((preset: DatePresetKey) => {
     setActivePreset(preset)
@@ -140,7 +142,7 @@ export function SolicitudesView() {
   }, [])
 
   const clearFilters = useCallback(() => {
-    setNombre(''); setCi(''); setCuenta(''); setSedeId('')
+    setNombre(''); setCi(''); setCuenta(''); setSedeId(''); setTransferCode('')
     setPage(1)
   }, [])
 
@@ -155,6 +157,7 @@ export function SolicitudesView() {
       clienteCi: debouncedCi || undefined,
       clienteCuenta: debouncedCuenta || undefined,
       sedeId: sedeId || undefined,
+      transferCode: debouncedTransferCode || undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
@@ -162,7 +165,7 @@ export function SolicitudesView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, sedeId].filter(Boolean).length
+  const activeFilterCount = [debouncedNombre, debouncedCi, debouncedCuenta, sedeId, debouncedTransferCode].filter(Boolean).length
 
   const pageData = data?.data ?? []
   const pageTotals = pageData.length > 0
@@ -206,6 +209,7 @@ export function SolicitudesView() {
             <FilterInput icon={User} label="Nombre" value={nombre} onChange={(v) => { setNombre(v); setPage(1) }} className="w-full md:w-40" />
             <FilterInput icon={Hash} label="CI" value={ci} onChange={(v) => { setCi(v); setPage(1) }} className="w-full md:w-32" />
             <FilterInput icon={Wallet} label="Cuenta" value={cuenta} onChange={(v) => { setCuenta(v); setPage(1) }} className="w-full md:w-40" />
+            <FilterInput icon={Code} label="Transfer Code" value={transferCode} onChange={(v) => { setTransferCode(v); setPage(1) }} className="w-full md:w-36" />
             <FilterInput icon={Building2} label="Sede" value={sedeId} onChange={(v) => { setSedeId(v); setPage(1) }} className="w-full md:w-24" />
           </>
         }

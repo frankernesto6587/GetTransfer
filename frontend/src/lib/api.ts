@@ -653,6 +653,7 @@ export interface SolicitudesParams {
   clienteCi?: string
   clienteCuenta?: string
   clienteNombre?: string
+  transferCode?: string
   fechaDesde?: string
   fechaHasta?: string
   orderBy?: string
@@ -667,6 +668,7 @@ export function buildSolicitudesUrl(params: SolicitudesParams): string {
   if (params.clienteCi) sp.set('clienteCi', params.clienteCi)
   if (params.clienteCuenta) sp.set('clienteCuenta', params.clienteCuenta)
   if (params.clienteNombre) sp.set('clienteNombre', params.clienteNombre)
+  if (params.transferCode) sp.set('transferCode', params.transferCode)
   if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   if (params.orderBy) sp.set('orderBy', params.orderBy)

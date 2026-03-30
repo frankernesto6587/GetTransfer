@@ -27,6 +27,7 @@ const solicitudesQuerySchema = z.object({
   clienteCi: z.string().optional(),
   clienteCuenta: z.string().optional(),
   clienteNombre: z.string().optional(),
+  transferCode: z.string().optional(),
   fechaDesde: z.string().optional(),
   fechaHasta: z.string().optional(),
   orderBy: z.string().optional(),
@@ -185,6 +186,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
     if (q.clienteCi) where.clienteCi = { contains: q.clienteCi, mode: 'insensitive' };
     if (q.clienteCuenta) where.clienteCuenta = { contains: q.clienteCuenta, mode: 'insensitive' };
     if (q.clienteNombre) where.clienteNombre = { contains: q.clienteNombre, mode: 'insensitive' };
+    if (q.transferCode) where.transferCode = { contains: q.transferCode, mode: 'insensitive' };
     if (q.fechaDesde || q.fechaHasta) {
       where.creadoAt = {};
       if (q.fechaDesde) (where.creadoAt as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');
