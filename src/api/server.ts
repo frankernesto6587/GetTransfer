@@ -128,6 +128,13 @@ async function main() {
       console.error('[Monitor] Error al iniciar:', err.message)
     );
 
+    // Auto-match pending solicitudes on startup
+    import('../db/repository').then(({ tryAutoMatch }) =>
+      tryAutoMatch().then(matched => {
+        if (matched > 0) console.log(`[AutoMatch] ${matched} solicitudes auto-conciliadas al iniciar`);
+      })
+    ).catch(err => console.error('[AutoMatch] Error al iniciar:', err.message));
+
   } catch (err) {
     app.log.error(err);
     process.exit(1);

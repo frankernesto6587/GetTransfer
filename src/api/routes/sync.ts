@@ -378,6 +378,17 @@ export async function syncRoutes(app: FastifyInstance) {
       }
     }
 
+    // Auto-match after processing events
+    if (acked.length > 0) {
+      try {
+        const { tryAutoMatch } = await import('../../db/repository');
+        const matched = await tryAutoMatch();
+        if (matched > 0) request.log.info({ msg: 'AutoMatch after sync', matched });
+      } catch (err) {
+        request.log.warn({ msg: 'AutoMatch error', error: (err as Error).message });
+      }
+    }
+
     return { acked, errors };
   });
 

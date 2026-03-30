@@ -25,6 +25,16 @@ export async function statementRoutes(app: FastifyInstance) {
 
     try {
       const result = await processStatementUpload(buffer, data.filename, userId);
+
+      // Auto-match after statement upload
+      try {
+        const { tryAutoMatch } = await import('../../db/repository');
+        const matched = await tryAutoMatch();
+        if (matched > 0) request.log.info({ msg: 'AutoMatch after statement upload', matched });
+      } catch (autoErr) {
+        request.log.warn({ msg: 'AutoMatch error', error: (autoErr as Error).message });
+      }
+
       return result;
     } catch (err: any) {
       if (err instanceof StatementValidationError) {

@@ -79,7 +79,62 @@ export async function upsertMany(
   });
 
   const nuevasList = transfers.filter(t => !existingKeys.has(compositeKey(t)));
+
+  // Auto-match new transfers with pending solicitudes
+  if (result.count > 0) {
+    try {
+      const matched = await tryAutoMatch();
+      if (matched > 0) console.log(`[AutoMatch] ${matched} solicitudes auto-conciliadas tras insertar transferencias`);
+    } catch (err) {
+      console.error('[AutoMatch] Error:', err);
+    }
+  }
+
   return { total: transfers.length, nuevas: result.count, nuevasList };
+}
+
+/**
+ * Auto-conciliar solicitudes pendientes con transferencias del banco.
+ * Match estricto: monto exacto + transferCode/refOrigen + cuenta + CI (4 campos).
+ */
+export async function tryAutoMatch(): Promise<number> {
+  const solicitudes = await prisma.solicitud.findMany({
+    where: {
+      workflowStatus: { not: 'cancelled' },
+      reconStatus: 'unmatched',
+      transferCode: { not: '' },
+    },
+  });
+
+  let matched = 0;
+  for (const sol of solicitudes) {
+    if (!sol.transferCode) continue;
+    const transfer = await prisma.transferencia.findFirst({
+      where: {
+        solicitud: { is: null },
+        tipo: 'Cr',
+        importe: Number(sol.monto),
+        refOrigen: sol.transferCode,
+        cuentaOrdenante: sol.clienteCuenta,
+        ciOrdenante: sol.clienteCi,
+      },
+    });
+    if (transfer) {
+      await prisma.solicitud.update({
+        where: { id: sol.id },
+        data: {
+          transferenciaId: transfer.id,
+          reconStatus: 'matched',
+          conciliadaAt: new Date(),
+          conciliadaPor: 'auto',
+          matchNivel: null,
+          sedeNotified: false,
+        },
+      });
+      matched++;
+    }
+  }
+  return matched;
 }
 
 export async function getAll(filters: TransferenciaFilters = {}) {
