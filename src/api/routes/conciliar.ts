@@ -115,7 +115,11 @@ function findSolicitudMatches(
         reclamadaPor: sol.reclamadaPor,
         nivel,
         diasDiferencia: sol.creadoAt && transfer.fecha
-          ? Math.round((new Date(transfer.fecha).getTime() - new Date(sol.creadoAt).getTime()) / (1000 * 60 * 60 * 24))
+          ? Math.round(
+              (new Date(new Date(transfer.fecha).toISOString().slice(0, 10)).getTime()
+               - new Date(new Date(sol.creadoAt).toISOString().slice(0, 10)).getTime())
+              / (1000 * 60 * 60 * 24)
+            )
           : null,
       });
     }
