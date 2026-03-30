@@ -366,6 +366,16 @@ export async function conciliarRoutes(app: FastifyInstance) {
       include: { transferencia: true },
     });
 
+    // Mark transferencia as confirmed
+    await prisma.transferencia.update({
+      where: { id },
+      data: {
+        codigoConfirmacion: updated.codigo,
+        confirmedAt: new Date(),
+        confirmedBy: user?.name || 'system',
+      },
+    });
+
     return { solicitud: updated, transfer };
   });
 
@@ -401,6 +411,16 @@ export async function conciliarRoutes(app: FastifyInstance) {
         conciliadaAt: null,
         conciliadaPor: null,
         matchNivel: null,
+      },
+    });
+
+    // Clear transferencia confirmation
+    await prisma.transferencia.update({
+      where: { id },
+      data: {
+        codigoConfirmacion: null,
+        confirmedAt: null,
+        confirmedBy: null,
       },
     });
 

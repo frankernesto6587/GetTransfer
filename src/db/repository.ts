@@ -131,6 +131,15 @@ export async function tryAutoMatch(): Promise<number> {
           sedeNotified: false,
         },
       });
+      // Mark transferencia as confirmed
+      await prisma.transferencia.update({
+        where: { id: transfer.id },
+        data: {
+          codigoConfirmacion: sol.codigo,
+          confirmedAt: new Date(),
+          confirmedBy: 'auto',
+        },
+      });
       matched++;
     }
   }
