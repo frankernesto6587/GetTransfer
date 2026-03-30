@@ -58,8 +58,6 @@ export function ConciliarView() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
 
-  const [confirmado, setConfirmado] = useState<{ solicitudCodigo: string } | null>(null)
-
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
 
   // Filters
@@ -77,7 +75,7 @@ export function ConciliarView() {
     setLoading(true)
     setError('')
     setCandidates([])
-    setConfirmado(null)
+
     try {
       const result = await getPendientesBancoConciliar(filters)
       setPendientes(result.data)
@@ -149,17 +147,25 @@ export function ConciliarView() {
   }, [loadPendientes])
 
   useEffect(() => {
-    if (transfer && !confirmado) {
+    if (transfer) {
       searchSolicitudes(transfer.id)
     }
-  }, [transfer, confirmado, searchSolicitudes])
+  }, [transfer, searchSolicitudes])
 
   const confirmarMut = useMutation({
     mutationFn: async ({ transferId, solicitudId, matchNivel }: { transferId: number; solicitudId: number; matchNivel?: number }) => {
       return confirmarConciliacion(transferId, solicitudId, matchNivel)
     },
-    onSuccess: (data) => {
-      setConfirmado({ solicitudCodigo: data.solicitud?.codigo || '?' })
+    onSuccess: () => {
+      // Remove from list and move to next automatically
+      const newList = pendientes.filter((_, i) => i !== currentIndex)
+      setPendientes(newList)
+      const nextIndex = Math.min(currentIndex, newList.length - 1)
+      setCurrentIndex(-1)
+      setCandidates([])
+      confirmarMut.reset()
+      setTimeout(() => setCurrentIndex(Math.max(0, nextIndex)), 0)
+      if (newList.length === 0) setError('No hay transferencias pendientes')
     },
   })
 
@@ -167,9 +173,15 @@ export function ConciliarView() {
     mutationFn: async ({ transferId, accion }: { transferId: number; accion: 'CONFIRMED_DEPOSIT' | 'CONFIRMED_BUY' | 'REVIEW_REQUIRED' }) => {
       return accionConciliar(transferId, accion)
     },
-    onSuccess: (data) => {
-      setConfirmado({ solicitudCodigo: data.codigoConfirmacion || '?' })
+    onSuccess: () => {
       setActionMenuOpen(false)
+      const newList = pendientes.filter((_, i) => i !== currentIndex)
+      setPendientes(newList)
+      const nextIndex = Math.min(currentIndex, newList.length - 1)
+      setCurrentIndex(-1)
+      setCandidates([])
+      setTimeout(() => setCurrentIndex(Math.max(0, nextIndex)), 0)
+      if (newList.length === 0) setError('No hay transferencias pendientes')
     },
   })
 
@@ -179,26 +191,10 @@ export function ConciliarView() {
   }
 
   const navigateTo = (index: number) => {
-    setConfirmado(null)
+
     setCandidates([])
     confirmarMut.reset()
     setCurrentIndex(index)
-  }
-
-  const handleSiguiente = () => {
-    if (confirmado) {
-      const newList = pendientes.filter((_, i) => i !== currentIndex)
-      setPendientes(newList)
-      const nextIndex = Math.min(currentIndex, newList.length - 1)
-      setCurrentIndex(-1)
-      setConfirmado(null)
-      setCandidates([])
-      confirmarMut.reset()
-      setTimeout(() => setCurrentIndex(Math.max(0, nextIndex)), 0)
-      if (newList.length === 0) setError('No hay transferencias pendientes')
-      return
-    }
-    if (currentIndex < pendientes.length - 1) navigateTo(currentIndex + 1)
   }
 
   const handleAnterior = () => {
@@ -372,7 +368,7 @@ export function ConciliarView() {
           <div className="rounded-xl border border-border bg-surface p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-headline text-lg font-semibold text-white">Solicitudes Candidatas</h3>
-              {!searching && !confirmado && (
+              {!searching && (
                 <button onClick={() => transfer && searchSolicitudes(transfer.id)}
                   className="flex items-center gap-1 text-xs text-tertiary hover:text-white transition-colors cursor-pointer">
                   <Search size={12} />Re-buscar
@@ -380,21 +376,8 @@ export function ConciliarView() {
               )}
             </div>
 
-            {/* Post-confirmation */}
-            {confirmado && (
-              <div className="text-center py-8">
-                <CheckCircle size={48} className="mx-auto text-emerald-400 mb-4" />
-                <p className="font-mono text-2xl font-bold text-white tracking-wider mb-2">{confirmado.solicitudCodigo}</p>
-                <p className="text-emerald-400 text-sm mb-1">Conciliado</p>
-                <button onClick={handleSiguiente}
-                  className="mt-6 px-4 py-2 bg-gold/20 text-gold rounded-lg hover:bg-gold/30 transition-colors cursor-pointer text-sm">
-                  Siguiente pendiente
-                </button>
-              </div>
-            )}
-
             {/* Searching */}
-            {searching && !confirmado && (
+            {searching && (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={20} className="animate-spin text-gold mr-3" />
                 <span className="text-secondary text-sm">Buscando solicitudes...</span>
@@ -402,14 +385,14 @@ export function ConciliarView() {
             )}
 
             {/* Error */}
-            {error && !searching && !confirmado && pendientes.length > 0 && (
+            {error && !searching && pendientes.length > 0 && (
               <div className="flex items-center gap-2 text-red-400 text-sm py-4">
                 <AlertCircle size={16} />{error}
               </div>
             )}
 
             {/* Candidates */}
-            {!searching && !confirmado && candidates.length > 0 && (
+            {!searching && candidates.length > 0 && (
               <div>
                 <p className="text-amber-400 text-sm mb-3">
                   {candidates.length} solicitud{candidates.length > 1 ? 'es' : ''} encontrada{candidates.length > 1 ? 's' : ''}
@@ -429,7 +412,7 @@ export function ConciliarView() {
             )}
 
             {/* No match */}
-            {!searching && !confirmado && candidates.length === 0 && !error && (
+            {!searching && candidates.length === 0 && !error && (
               <div className="text-center py-12">
                 <XCircle size={36} className="mx-auto text-tertiary mb-3" />
                 <p className="text-secondary text-sm">Sin solicitudes que coincidan</p>
