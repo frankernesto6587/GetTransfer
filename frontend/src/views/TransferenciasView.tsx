@@ -112,7 +112,6 @@ function makeColumns(onView: (t: Transferencia) => void) {
     }),
     col.accessor('codigoConfirmacion', {
       header: 'Estado',
-      enableSorting: false,
       cell: (info) => {
         const codigo = info.getValue()
         const matchType = info.row.original.matchType
