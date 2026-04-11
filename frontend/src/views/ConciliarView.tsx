@@ -495,7 +495,7 @@ function SolicitudCard({
   const [showRenameConfirm, setShowRenameConfirm] = useState(false)
   const [renameResult, setRenameResult] = useState<string | null>(null)
   const m = transfer ? getMatchingFields(transfer, c) : null
-  const showRenameBtn = isAdmin && m?.nombre === 'similar' && transfer?.nombreOrdenante
+  const showRenameBtn = isAdmin && m?.nombre !== 'exact' && transfer?.nombreOrdenante
 
   const handleRename = async () => {
     if (!transfer?.nombreOrdenante || !c.clienteCi) return
