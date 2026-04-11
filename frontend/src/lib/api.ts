@@ -750,6 +750,19 @@ export async function accionConciliar(transferenciaId: number, accion: 'CONFIRME
   return res.json()
 }
 
+export async function renamePartnerByCi(ci: string, newName: string): Promise<{ success: boolean; updated: number; solicitudesUpdated?: number }> {
+  const res = await apiFetch('/api/conciliar/rename-partner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ci, new_name: newName }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function getSyncMetrics(): Promise<SyncMetrics> {
   const res = await apiFetch('/api/solicitudes/sync-metrics')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

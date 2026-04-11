@@ -24,7 +24,9 @@ import {
   buscarSolicitudesMatch,
   confirmarConciliacion,
   accionConciliar,
+  renamePartnerByCi,
 } from '../lib/api'
+import { useAuth } from '../contexts/AuthContext'
 import type { Transferencia, SolicitudCandidate } from '../types'
 
 function displayFecha(f: string) {
@@ -51,6 +53,7 @@ function firstOfMonth() {
 }
 
 export function ConciliarView() {
+  const { isAdmin } = useAuth()
   const [pendientes, setPendientes] = useState<Transferencia[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [candidates, setCandidates] = useState<SolicitudCandidate[]>([])
@@ -405,6 +408,7 @@ export function ConciliarView() {
                       transfer={transfer}
                       onConfirmar={() => handleConfirmar(c.id, c.nivel)}
                       confirming={confirmarMut.isPending}
+                      isAdmin={isAdmin}
                     />
                   ))}
                 </div>
@@ -479,13 +483,48 @@ function SolicitudCard({
   transfer,
   onConfirmar,
   confirming,
+  isAdmin = false,
 }: {
   candidate: SolicitudCandidate
   transfer: Transferencia | null
   onConfirmar: () => void
   confirming: boolean
+  isAdmin?: boolean
 }) {
+  const [renaming, setRenaming] = useState(false)
+  const [showRenameConfirm, setShowRenameConfirm] = useState(false)
+  const [renameResult, setRenameResult] = useState<string | null>(null)
   const m = transfer ? getMatchingFields(transfer, c) : null
+  const showRenameBtn = isAdmin && m?.nombre === 'similar' && transfer?.nombreOrdenante
+
+  const handleRename = async () => {
+    if (!transfer?.nombreOrdenante || !c.clienteCi) return
+    setRenaming(true)
+    setRenameResult(null)
+    try {
+      const result = await renamePartnerByCi(c.clienteCi, transfer.nombreOrdenante)
+      const solMsg = result.solicitudesUpdated ? ` y ${result.solicitudesUpdated} solicitud(es) pendiente(s)` : ''
+      setRenameResult(`success:Nombre actualizado en ${result.updated} cliente(s)${solMsg}`)
+      setShowRenameConfirm(false)
+      // Auto-clear after 5s
+      setTimeout(() => setRenameResult(null), 5000)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      let userMsg = msg
+      if (msg.includes('404') || msg.includes('No se encontraron')) {
+        userMsg = 'No se encontró ningún cliente con ese CI en Odoo'
+      } else if (msg.includes('502') || msg.includes('Odoo')) {
+        userMsg = 'No se pudo conectar con Odoo. Verifique que esté disponible'
+      } else if (msg.includes('403') || msg.includes('Forbidden')) {
+        userMsg = 'No tiene permisos para realizar esta acción'
+      }
+      setRenameResult(`error:${userMsg}`)
+      setShowRenameConfirm(false)
+      setTimeout(() => setRenameResult(null), 8000)
+    } finally {
+      setRenaming(false)
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border/50 bg-white/[0.02] p-4">
@@ -525,7 +564,19 @@ function SolicitudCard({
         </div>
         <div>
           <span className="text-tertiary">Nombre</span>
-          <p className={m ? nombreClass(m.nombre) : 'text-secondary'}>{c.clienteNombre}</p>
+          <div className="flex items-center gap-1">
+            <p className={m ? nombreClass(m.nombre) : 'text-secondary'}>{c.clienteNombre}</p>
+            {showRenameBtn && (
+              <button
+                onClick={() => setShowRenameConfirm(true)}
+                disabled={renaming}
+                title={`Actualizar nombre en Odoo a: ${transfer.nombreOrdenante}`}
+                className="p-0.5 text-amber-400/60 hover:text-amber-400 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                {renaming ? <Loader2 size={12} className="animate-spin" /> : <AlertCircle size={12} />}
+              </button>
+            )}
+          </div>
         </div>
         <div>
           <span className="text-tertiary">Cuenta</span>
@@ -546,11 +597,82 @@ function SolicitudCard({
           </div>
         )}
       </div>
+      {/* Rename result toast */}
+      {renameResult && (
+        <div className={`mb-2 text-xs px-3 py-2.5 rounded-lg flex items-center gap-2 ${
+          renameResult.startsWith('error:')
+            ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+            : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+        }`}>
+          {renameResult.startsWith('error:') ? <AlertCircle size={14} /> : <CheckCircle size={14} />}
+          <span>{renameResult.replace(/^(success:|error:)/, '')}</span>
+          <button onClick={() => setRenameResult(null)} className="ml-auto text-tertiary hover:text-white cursor-pointer">
+            <XCircle size={14} />
+          </button>
+        </div>
+      )}
+
       <button onClick={onConfirmar} disabled={confirming}
         className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg hover:bg-emerald-500/25 transition-colors disabled:opacity-40 cursor-pointer text-sm font-medium">
         <CheckCircle size={14} />
         {confirming ? 'Conciliando...' : 'Conciliar'}
       </button>
+
+      {/* Rename confirmation modal */}
+      {showRenameConfirm && transfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowRenameConfirm(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-surface border border-border rounded-2xl w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <AlertTriangle size={20} className="text-amber-400" />
+                <h3 className="text-white font-semibold">Actualizar nombre en Odoo</h3>
+              </div>
+
+              <p className="text-secondary text-sm mb-4">
+                Esta acción es <span className="text-amber-400 font-medium">irreversible</span>. Se actualizará el nombre del cliente en Odoo y en todas las solicitudes pendientes con este CI.
+              </p>
+
+              <div className="space-y-3 mb-5 text-sm">
+                <div className="flex justify-between items-center py-2 border-b border-border/50">
+                  <span className="text-tertiary">CI</span>
+                  <span className="text-white font-mono">{c.clienteCi}</span>
+                </div>
+                <div className="flex justify-between items-start py-2 border-b border-border/50">
+                  <span className="text-tertiary">Nombre actual</span>
+                  <span className="text-red-400 text-right max-w-[60%]">{c.clienteNombre}</span>
+                </div>
+                <div className="flex justify-between items-start py-2">
+                  <span className="text-tertiary">Nombre nuevo</span>
+                  <span className="text-emerald-400 text-right max-w-[60%]">{transfer.nombreOrdenante}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowRenameConfirm(false)}
+                  disabled={renaming}
+                  className="flex-1 px-4 py-2.5 text-sm text-secondary border border-border rounded-lg hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleRename}
+                  disabled={renaming}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-amber-400 bg-amber-500/15 border border-amber-500/30 rounded-lg hover:bg-amber-500/25 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  {renaming ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 size={14} className="animate-spin" />
+                      Actualizando...
+                    </span>
+                  ) : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

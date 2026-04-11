@@ -426,4 +426,60 @@ export async function conciliarRoutes(app: FastifyInstance) {
 
     return { success: true };
   });
+
+  // Rename partner by CI in Odoo (admin/root only)
+  app.post('/api/conciliar/rename-partner', { preHandler: requireRole('admin') }, async (request, reply) => {
+    const bodySchema = z.object({
+      ci: z.string().min(1),
+      new_name: z.string().min(1),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'ci y new_name requeridos' });
+    }
+
+    const { getOdooConfig } = await import('../../db/repository');
+    const config = await getOdooConfig();
+    if (!config.api_url || !config.api_key) {
+      return reply.status(502).send({ error: 'Odoo API no configurada' });
+    }
+
+    try {
+      // 1. Rename partner in Odoo
+      const res = await fetch(`${config.api_url}/api/partners/rename-by-ci`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': config.api_key,
+        },
+        body: JSON.stringify({ ci: parsed.data.ci, new_name: parsed.data.new_name }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        return reply.status(res.status).send({ error: text || `Odoo error ${res.status}` });
+      }
+
+      const odooResult = await res.json();
+
+      // 2. Update pending solicitudes with same CI
+      const solUpdated = await prisma.solicitud.updateMany({
+        where: {
+          clienteCi: parsed.data.ci,
+          reconStatus: { not: 'matched' },
+        },
+        data: {
+          clienteNombre: parsed.data.new_name,
+        },
+      });
+
+      return {
+        ...odooResult,
+        solicitudesUpdated: solUpdated.count,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      return reply.status(502).send({ error: `Error conectando con Odoo: ${msg}` });
+    }
+  });
 }
