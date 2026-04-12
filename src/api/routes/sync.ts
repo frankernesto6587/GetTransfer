@@ -240,17 +240,21 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
       }
       if (sol.lastEventId === event.event_id) return;
 
-      // Cannot annul if already reconciled
-      if (sol.reconStatus === 'matched') {
-        throw new Error('Cannot annul: already reconciled');
-      }
       // Terminal state
       if (sol.workflowStatus === 'cancelled') return; // Idempotent
+
+      // If already matched, undo the match (unlink transferencia)
+      const wasMatched = sol.reconStatus === 'matched';
 
       await prisma.solicitud.update({
         where: { codigo: event.solicitud_codigo },
         data: {
           workflowStatus: 'cancelled',
+          reconStatus: 'unmatched',
+          transferenciaId: null,
+          conciliadaAt: null,
+          conciliadaPor: null,
+          matchNivel: null,
           anuladaAt: payload.cancelled_at ? new Date(payload.cancelled_at) : new Date(),
           anuladaPor: payload.cancelled_by || null,
           motivoAnulacion: payload.cancel_reason || null,
@@ -258,6 +262,10 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
           lastEventId: event.event_id,
         },
       });
+
+      if (wasMatched) {
+        console.log(`[Sync] ANNULLED matched solicitud ${event.solicitud_codigo} — match undone`);
+      }
       break;
     }
 
