@@ -536,7 +536,6 @@ export async function syncRoutes(app: FastifyInstance) {
       where: {
         codigo: { in: body.data.codigos },
         sedeId: sede.prefix,
-        reconStatus: 'matched',
       },
       data: { sedeNotified: true },
     });

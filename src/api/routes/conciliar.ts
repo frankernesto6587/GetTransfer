@@ -411,6 +411,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
         conciliadaAt: null,
         conciliadaPor: null,
         matchNivel: null,
+        sedeNotified: false,
       },
     });
 
