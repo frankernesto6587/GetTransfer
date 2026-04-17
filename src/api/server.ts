@@ -28,6 +28,7 @@ import { conciliarRoutes } from './routes/conciliar';
 import { sedeRoutes } from './routes/sedes';
 import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
+import { clienteRoutes } from './routes/cliente';
 import { jwtAuth } from './middleware/auth';
 import { prisma } from '../db/repository';
 import { monitorService } from '../monitor/monitor-service';
@@ -98,6 +99,7 @@ async function main() {
   await app.register(syncRoutes);
   await app.register(conciliarRoutes);
   await app.register(sedeRoutes);
+  await app.register(clienteRoutes);
 
   app.get('/api/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 

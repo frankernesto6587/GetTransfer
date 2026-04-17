@@ -30,7 +30,7 @@ const PUBLIC_PREFIXES = ['/api/health', '/api/auth/google', '/docs'];
 // Telegram incoming webhook: token is a long bot token like "123456:ABC-DEF", never "register"/"unregister"/"info"
 const WEBHOOK_ADMIN_PATHS = new Set(['register', 'unregister', 'info']);
 
-const BEARER_PREFIXES = ['/api/reclamar', '/api/export', '/api/sync'];
+const BEARER_PREFIXES = ['/api/reclamar', '/api/export', '/api/sync', '/api/cliente'];
 
 export async function jwtAuth(request: FastifyRequest, reply: FastifyReply) {
   const path = request.url.split('?')[0];
