@@ -291,8 +291,8 @@ export async function accionEspecial(
   return res.json()
 }
 
-export async function desmacharTransferencia(transferId: number): Promise<Transferencia> {
-  const res = await apiFetch(`/api/confirmar-odoo/pendiente/${transferId}/desmachar`, { method: 'POST' })
+export async function desmacharTransferencia(transferId: number): Promise<{ success: boolean }> {
+  const res = await apiFetch(`/api/conciliar/${transferId}/deshacer`, { method: 'POST' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `HTTP ${res.status}`)
