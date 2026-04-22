@@ -84,7 +84,8 @@ function findSolicitudMatches(
     const montoExacto = Number(sol.monto) === transfer.importe;
     if (!montoExacto) continue;
 
-    const codeMatch = transfer.refOrigen && sol.transferCode && transfer.refOrigen === sol.transferCode;
+    const codeMatch = transfer.refOrigen && sol.transferCode &&
+      transfer.refOrigen.trim().toLowerCase() === sol.transferCode.trim().toLowerCase();
     const cuentaMatch = transfer.cuentaOrdenante && sol.clienteCuenta && transfer.cuentaOrdenante === sol.clienteCuenta;
     const ciMatch = transfer.ciOrdenante && sol.clienteCi && transfer.ciOrdenante === sol.clienteCi;
 

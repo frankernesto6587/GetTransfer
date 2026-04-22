@@ -114,7 +114,7 @@ export async function tryAutoMatch(): Promise<number> {
         solicitud: { is: null },
         tipo: 'Cr',
         importe: Number(sol.monto),
-        refOrigen: sol.transferCode,
+        refOrigen: { equals: sol.transferCode, mode: 'insensitive' },
         cuentaOrdenante: sol.clienteCuenta,
         ciOrdenante: sol.clienteCi,
       },
