@@ -48,6 +48,16 @@ const syncRequestSchema = z.object({
 
 type SyncEvent = z.infer<typeof syncEventSchema>;
 
+// ── Helper: parse sync date as UTC ──
+// Sede modules send timestamps in UTC but without 'Z' (naive ISO).
+// On servers in non-UTC timezones (e.g. America/Havana), `new Date(naiveISO)`
+// would interpret the string as local time and shift it. We force UTC here.
+function parseSyncDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const hasTz = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(s);
+  return new Date(hasTz ? s : s + 'Z');
+}
+
 // ── Helper: compute fingerprint ──
 
 function computeFingerprint(fields: { clienteCi: string; clienteCuenta: string; monto: number; transferCode?: string }): string {
@@ -119,7 +129,7 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
           transferCode: fields.transferCode || null,
           notas: fields.notas || null,
           fingerprint: fp,
-          creadoAt: fields.creadoAt ? new Date(fields.creadoAt) : new Date(),
+          creadoAt: parseSyncDate(fields.creadoAt) ?? new Date(),
           creadoPor: fields.creadoPor || '',
           crossDupOf,
         },
@@ -146,10 +156,10 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
             transferCode: fields.transferCode || null,
             notas: fields.notas || null,
             fingerprint: fp,
-            creadoAt: fields.creadoAt ? new Date(fields.creadoAt) : new Date(),
+            creadoAt: parseSyncDate(fields.creadoAt) ?? new Date(),
             creadoPor: fields.creadoPor || '',
             workflowStatus: 'claimed',
-            reclamadaAt: payload.claimed_at ? new Date(payload.claimed_at) : new Date(),
+            reclamadaAt: parseSyncDate(payload.claimed_at) ?? new Date(),
             reclamadaPor: payload.claimed_by || null,
           },
         });
@@ -190,7 +200,7 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
         where: { codigo: event.solicitud_codigo },
         data: {
           workflowStatus: 'claimed',
-          reclamadaAt: payload.claimed_at ? new Date(payload.claimed_at) : new Date(),
+          reclamadaAt: parseSyncDate(payload.claimed_at) ?? new Date(),
           reclamadaPor: payload.claimed_by || null,
           version: payload.version,
           lastEventId: event.event_id,
@@ -218,10 +228,10 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
             transferCode: fields.transferCode || null,
             notas: fields.notas || null,
             fingerprint: fp,
-            creadoAt: fields.creadoAt ? new Date(fields.creadoAt) : new Date(),
+            creadoAt: parseSyncDate(fields.creadoAt) ?? new Date(),
             creadoPor: fields.creadoPor || '',
             workflowStatus: 'cancelled',
-            anuladaAt: payload.cancelled_at ? new Date(payload.cancelled_at) : new Date(),
+            anuladaAt: parseSyncDate(payload.cancelled_at) ?? new Date(),
             anuladaPor: payload.cancelled_by || null,
             motivoAnulacion: payload.cancel_reason || null,
           },
@@ -255,7 +265,7 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
           conciliadaAt: null,
           conciliadaPor: null,
           matchNivel: null,
-          anuladaAt: payload.cancelled_at ? new Date(payload.cancelled_at) : new Date(),
+          anuladaAt: parseSyncDate(payload.cancelled_at) ?? new Date(),
           anuladaPor: payload.cancelled_by || null,
           motivoAnulacion: payload.cancel_reason || null,
           version: payload.version,
@@ -372,7 +382,7 @@ export async function syncRoutes(app: FastifyInstance) {
             payload: event.payload as any,
             payloadHash: event.payload_hash || null,
             sedeId: event.sede_id,
-            createdAt: new Date(event.created_at),
+            createdAt: parseSyncDate(event.created_at) ?? new Date(),
           },
         });
 
