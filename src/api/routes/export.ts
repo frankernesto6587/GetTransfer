@@ -104,7 +104,7 @@ export async function exportRoutes(app: FastifyInstance) {
     'codigo_gt', 'transfer_code', 'nombre_solicitud', 'ci_solicitud',
     'cuenta_solicitud', 'monto_solicitud', 'sede', 'creada_at',
     'workflow_status', 'match_nivel', 'conciliada_at', 'conciliada_por',
-    'claimed_at', 'odoo_ref',
+    'reclamada_at', 'reclamada_por',
   ];
 
   app.get('/api/export/banco-solicitudes', async (request, reply) => {
@@ -131,7 +131,7 @@ export async function exportRoutes(app: FastifyInstance) {
     const rows = transferencias.map(t => {
       const sol = t.solicitud;
       const matched = !!sol;
-      const claimed = !!t.claimedAt;
+      const claimed = !!sol?.reclamadaAt;
       const row: Record<string, unknown> = {
         fecha_banco: t.fecha instanceof Date ? t.fecha.toISOString().split('T')[0] : t.fecha,
         importe: t.importe,
@@ -156,8 +156,8 @@ export async function exportRoutes(app: FastifyInstance) {
         match_nivel: sol?.matchNivel ?? (sol?.conciliadaPor === 'auto' ? 'Auto' : ''),
         conciliada_at: sol?.conciliadaAt instanceof Date ? sol.conciliadaAt.toISOString() : '',
         conciliada_por: sol?.conciliadaPor ?? '',
-        claimed_at: t.claimedAt instanceof Date ? t.claimedAt.toISOString() : '',
-        odoo_ref: t.claimedBy ?? '',
+        reclamada_at: sol?.reclamadaAt instanceof Date ? sol.reclamadaAt.toISOString() : '',
+        reclamada_por: sol?.reclamadaPor ?? '',
       };
       return BANCO_COLUMNS.map(col => escapeCsvField(row[col])).join(',');
     });
