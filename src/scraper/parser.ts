@@ -114,11 +114,23 @@ function parseTextoFormat(obs: string): Partial<TransferenciaEntrada> {
   return result;
 }
 
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 export function parseObservaciones(obs: string): Partial<TransferenciaEntrada> {
-  if (obs.includes('<RCSLBTR_102>') || obs.includes('<DET_PAGO>')) {
-    return parseXMLFormat(obs);
-  } else if (obs.includes('CREDITO RECIBIDO') || obs.includes('ORDENANTE NOMBRE:')) {
-    return parseTextoFormat(obs);
+  // BPA messages routed through email gateway arrive double-html-encoded.
+  // textContent in the scraper only decodes once, so apply a second pass here.
+  const decoded = decodeHtmlEntities(obs);
+  if (decoded.includes('<RCSLBTR_102>') || decoded.includes('<DET_PAGO>')) {
+    return parseXMLFormat(decoded);
+  } else if (decoded.includes('CREDITO RECIBIDO') || decoded.includes('ORDENANTE NOMBRE:')) {
+    return parseTextoFormat(decoded);
   }
   return { formato: 'desconocido' };
 }
