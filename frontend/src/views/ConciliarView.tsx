@@ -511,7 +511,9 @@ function SolicitudCard({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido'
       let userMsg = msg
-      if (msg.includes('404') || msg.includes('No se encontraron')) {
+      if (msg.includes('Odoo 401') || /unauthorized|api.?key|credencial/i.test(msg)) {
+        userMsg = 'Error de credenciales con Odoo: verifique la API key configurada en Config'
+      } else if (msg.includes('404') || msg.includes('No se encontraron')) {
         userMsg = 'No se encontró ningún cliente con ese CI en Odoo'
       } else if (msg.includes('502') || msg.includes('Odoo')) {
         userMsg = 'No se pudo conectar con Odoo. Verifique que esté disponible'

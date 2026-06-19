@@ -28,6 +28,7 @@ const solicitudesQuerySchema = z.object({
   clienteCuenta: z.string().optional(),
   clienteNombre: z.string().optional(),
   transferCode: z.string().optional(),
+  codigo: z.string().optional(),
   fechaDesde: z.string().optional(),
   fechaHasta: z.string().optional(),
   orderBy: z.string().optional(),
@@ -192,6 +193,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
     if (q.clienteCuenta) where.clienteCuenta = { contains: q.clienteCuenta, mode: 'insensitive' };
     if (q.clienteNombre) where.clienteNombre = { contains: q.clienteNombre, mode: 'insensitive' };
     if (q.transferCode) where.transferCode = { contains: q.transferCode, mode: 'insensitive' };
+    if (q.codigo) where.codigo = { contains: q.codigo, mode: 'insensitive' };
     if (q.fechaDesde || q.fechaHasta) {
       where.creadoAt = {};
       if (q.fechaDesde) (where.creadoAt as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');
@@ -459,7 +461,12 @@ export async function conciliarRoutes(app: FastifyInstance) {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        return reply.status(res.status).send({ error: text || `Odoo error ${res.status}` });
+        // No reenviar el status de Odoo tal cual: un 401 de Odoo (p.ej. X-API-Key
+        // invalida/expirada) hacia que el frontend lo confundiera con "sesion
+        // expirada" y redirigiera al dashboard. Lo mapeamos a 502 y lo dejamos
+        // trazado en el log (antes no quedaba ninguna traza server-side).
+        request.log.error({ odooStatus: res.status, odooBody: text?.slice(0, 500) }, 'Odoo rename-by-ci fallo');
+        return reply.status(502).send({ error: text || `Odoo error ${res.status}`, odooStatus: res.status });
       }
 
       const odooResult = await res.json();

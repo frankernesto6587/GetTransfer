@@ -2,10 +2,13 @@ import type { Transferencia, TransferenciasResponse, TransferenciasOdooResponse,
 
 // ── Base fetch helper with credentials + 401 handling ──
 
-export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+export async function apiFetch(url: string, init?: RequestInit, opts?: { skipAuthRedirect?: boolean }): Promise<Response> {
   const res = await fetch(url, { credentials: 'include', ...init })
-  if (res.status === 401) {
-    // Session expired — reload to trigger login
+  if (res.status === 401 && !opts?.skipAuthRedirect) {
+    // Session expired — reload to trigger login.
+    // skipAuthRedirect lo usan acciones (p.ej. rename-partner) donde un 401 puede
+    // venir de un servicio upstream (Odoo) y no de la sesion: en esos casos
+    // dejamos que el error se propague al catch en vez de mandar al dashboard.
     window.location.href = '/'
     throw new Error('Sesion expirada')
   }
@@ -654,6 +657,7 @@ export interface SolicitudesParams {
   clienteCuenta?: string
   clienteNombre?: string
   transferCode?: string
+  codigo?: string
   fechaDesde?: string
   fechaHasta?: string
   orderBy?: string
@@ -669,6 +673,7 @@ export function buildSolicitudesUrl(params: SolicitudesParams): string {
   if (params.clienteCuenta) sp.set('clienteCuenta', params.clienteCuenta)
   if (params.clienteNombre) sp.set('clienteNombre', params.clienteNombre)
   if (params.transferCode) sp.set('transferCode', params.transferCode)
+  if (params.codigo) sp.set('codigo', params.codigo)
   if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   if (params.orderBy) sp.set('orderBy', params.orderBy)
@@ -755,10 +760,11 @@ export async function renamePartnerByCi(ci: string, newName: string): Promise<{ 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ci, new_name: newName }),
-  })
+  }, { skipAuthRedirect: true })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({} as { error?: string; odooStatus?: number }))
+    const detail = body.odooStatus ? ` (Odoo ${body.odooStatus})` : ''
+    throw new Error((body.error || `HTTP ${res.status}`) + detail)
   }
   return res.json()
 }
