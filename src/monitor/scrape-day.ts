@@ -17,7 +17,8 @@ export async function loginAndCheck(page: Page): Promise<BankCheckResult> {
 
   const { getMatrixValue } = await import('../scraper/matrix');
 
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
   await page.fill('input[name="Usuario"]', username);
   await page.fill('input[type="password"]', password);
@@ -51,7 +52,8 @@ export async function loginAndCheck(page: Page): Promise<BankCheckResult> {
 /** Reload and check status without logging in (reuses existing session) */
 export async function reloadAndCheck(page: Page): Promise<BankCheckResult> {
   const url = process.env.BANDEC_URL || 'http://www.bandec.cu/VirtualBANDEC/';
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   return readBankStatus(page);
 }
 
@@ -134,12 +136,27 @@ function parseRows(rows: string[][]): TransferenciaEntrada[] {
 }
 
 export async function navigateToOperaciones(page: Page): Promise<boolean> {
-  await page.click('a:has-text("Operaciones Diarias")', { timeout: 60000 });
-  await page.waitForTimeout(2000);
-  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {});
+  // Si el formulario de busqueda ya esta en pantalla (p.ej. justo despues de
+  // una busqueda previa) no hace falta navegar: se puede re-enviar directo.
+  // Esto evita el timeout al re-clickear "Operaciones Diarias" en la vista de
+  // resultados, que es lo que hacia fallar siempre el pase de debitos.
+  if (await page.$('button[type="submit"]')) return true;
 
-  const submitExists = await page.$('button[type="submit"]');
-  return !!submitExists;
+  const opLink = page.locator('a:has-text("Operaciones Diarias")').first();
+  try {
+    await opLink.click({ timeout: 15000 });
+  } catch {
+    // Desde una vista de resultados el link del menu puede quedar inalcanzable.
+    // Recargamos el portal (la cookie de sesion nos mantiene logueados) y reintentamos.
+    const url = process.env.BANDEC_URL || 'http://www.bandec.cu/VirtualBANDEC/';
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await opLink.click({ timeout: 15000 }).catch(() => {});
+  }
+  await page.waitForTimeout(2000);
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+
+  return !!(await page.$('button[type="submit"]'));
 }
 
 async function scrapeDayOnePass(page: Page, dateStr: string, checkboxId: '#creditos' | '#debitos'): Promise<TransferenciaEntrada[]> {
