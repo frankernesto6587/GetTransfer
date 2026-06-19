@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle, Code, Ticket } from 'lucide-react'
-import { FilterBar, FilterInput, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
+import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
 import { solicitudesQuery, apiFetch } from '../lib/api'
@@ -30,6 +30,9 @@ const reconBadge: Record<string, { class: string; label: string }> = {
   suggested: { class: 'bg-orange-500/10 text-orange-400', label: 'Sugerido' },
   matched: { class: 'bg-emerald-500/10 text-emerald-400', label: 'Conciliada' },
 }
+
+const workflowOptions = Object.entries(workflowBadge).map(([value, b]) => ({ value, label: b.label }))
+const reconOptions = Object.entries(reconBadge).map(([value, b]) => ({ value, label: b.label }))
 
 function makeColumns(onView: (s: Solicitud) => void) {
   return [
@@ -119,6 +122,8 @@ export function SolicitudesView() {
   const [cuenta, setCuenta] = useState('')
   const [sedeId, setSedeId] = useState('')
   const [transferCode, setTransferCode] = useState('')
+  const [workflowStatus, setWorkflowStatus] = useState('')
+  const [reconStatus, setReconStatus] = useState('')
   const debouncedCodigo = useDebouncedValue(codigo)
   const debouncedNombre = useDebouncedValue(nombre)
   const debouncedCi = useDebouncedValue(ci)
@@ -145,6 +150,7 @@ export function SolicitudesView() {
 
   const clearFilters = useCallback(() => {
     setCodigo(''); setNombre(''); setCi(''); setCuenta(''); setSedeId(''); setTransferCode('')
+    setWorkflowStatus(''); setReconStatus('')
     setPage(1)
   }, [])
 
@@ -161,6 +167,8 @@ export function SolicitudesView() {
       clienteCuenta: debouncedCuenta || undefined,
       sedeId: sedeId || undefined,
       transferCode: debouncedTransferCode || undefined,
+      workflowStatus: workflowStatus || undefined,
+      reconStatus: reconStatus || undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
@@ -168,7 +176,7 @@ export function SolicitudesView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const activeFilterCount = [debouncedCodigo, debouncedNombre, debouncedCi, debouncedCuenta, sedeId, debouncedTransferCode].filter(Boolean).length
+  const activeFilterCount = [debouncedCodigo, debouncedNombre, debouncedCi, debouncedCuenta, sedeId, debouncedTransferCode, workflowStatus, reconStatus].filter(Boolean).length
 
   const pageData = data?.data ?? []
   const pageTotals = pageData.length > 0
@@ -215,6 +223,8 @@ export function SolicitudesView() {
             <FilterInput icon={Wallet} label="Cuenta" value={cuenta} onChange={(v) => { setCuenta(v); setPage(1) }} className="w-full md:w-40" />
             <FilterInput icon={Code} label="Transfer Code" value={transferCode} onChange={(v) => { setTransferCode(v); setPage(1) }} className="w-full md:w-36" />
             <FilterInput icon={Building2} label="Sede" value={sedeId} onChange={(v) => { setSedeId(v); setPage(1) }} className="w-full md:w-24" />
+            <FilterSelect value={workflowStatus} onChange={(v) => { setWorkflowStatus(v); setPage(1) }} options={workflowOptions} allLabel="Estado: todos" className="w-full md:w-36" />
+            <FilterSelect value={reconStatus} onChange={(v) => { setReconStatus(v); setPage(1) }} options={reconOptions} allLabel="Conciliación: todas" className="w-full md:w-40" />
           </>
         }
       />

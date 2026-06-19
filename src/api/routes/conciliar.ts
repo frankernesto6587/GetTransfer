@@ -29,6 +29,8 @@ const solicitudesQuerySchema = z.object({
   clienteNombre: z.string().optional(),
   transferCode: z.string().optional(),
   codigo: z.string().optional(),
+  workflowStatus: z.enum(['pending', 'claimed', 'cancelled']).optional(),
+  reconStatus: z.enum(['unmatched', 'suggested', 'matched']).optional(),
   fechaDesde: z.string().optional(),
   fechaHasta: z.string().optional(),
   orderBy: z.string().optional(),
@@ -174,6 +176,8 @@ export async function conciliarRoutes(app: FastifyInstance) {
     if (q.clienteNombre) where.clienteNombre = { contains: q.clienteNombre, mode: 'insensitive' };
     if (q.transferCode) where.transferCode = { contains: q.transferCode, mode: 'insensitive' };
     if (q.codigo) where.codigo = { contains: q.codigo, mode: 'insensitive' };
+    if (q.workflowStatus) where.workflowStatus = q.workflowStatus;
+    if (q.reconStatus) where.reconStatus = q.reconStatus;
     if (q.fechaDesde || q.fechaHasta) {
       where.creadoAt = {};
       if (q.fechaDesde) (where.creadoAt as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');
