@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../middleware/auth';
-import { prisma } from '../../db/repository';
+import { prisma, nameSimilarity } from '../../db/repository';
 import { Prisma } from '@prisma/client';
 
 // ── Schemas ──
@@ -131,27 +131,7 @@ function findSolicitudMatches(
   return candidates;
 }
 
-function nameSimilarity(a: string, b: string): number {
-  if (!a || !b) return 0;
-  const normalize = (s: string) =>
-    s.toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, '')
-      .trim();
-  const tokensA = normalize(a).split(/\s+/).filter(Boolean);
-  const tokensB = normalize(b).split(/\s+/).filter(Boolean);
-  if (!tokensA.length || !tokensB.length) return 0;
-
-  let matched = 0;
-  for (const ta of tokensA) {
-    for (const tb of tokensB) {
-      if (ta === tb) { matched++; break; }
-      if (ta.length >= 2 && tb.startsWith(ta)) { matched += 0.8; break; }
-      if (tb.length >= 2 && ta.startsWith(tb)) { matched += 0.8; break; }
-    }
-  }
-  return (matched / Math.max(tokensA.length, tokensB.length)) * 100;
-}
+// nameSimilarity se importa de repository.ts (compartida con el auto-match BPA).
 
 // ── Routes ──
 

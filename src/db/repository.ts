@@ -143,6 +143,102 @@ export async function tryAutoMatch(): Promise<number> {
       matched++;
     }
   }
+
+  // Pase 2: regla BPA (canal BANCAMOVIL-BPA; estos NO traen CI ni codigo).
+  matched += await tryAutoMatchBpa();
+
+  return matched;
+}
+
+const BPA_CANAL = 'BANCAMOVIL-BPA';
+const BPA_NOMBRE_SIM_MIN = 90;   // % minimo de similitud de nombre
+const BPA_VENTANA_DIAS = 5;      // +- dias entre fecha de la transferencia y creadoAt de la solicitud
+
+/**
+ * Similitud de nombre por tokens (0-100), normalizando mayusculas/acentos/simbolos.
+ * Compartida con la conciliacion manual nivel 5 (conciliar.ts).
+ */
+export function nameSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  const tokensA = normalize(a).split(/\s+/).filter(Boolean);
+  const tokensB = normalize(b).split(/\s+/).filter(Boolean);
+  if (!tokensA.length || !tokensB.length) return 0;
+  let matched = 0;
+  for (const ta of tokensA) {
+    for (const tb of tokensB) {
+      if (ta === tb) { matched++; break; }
+      if (ta.length >= 2 && tb.startsWith(ta)) { matched += 0.8; break; }
+      if (tb.length >= 2 && ta.startsWith(tb)) { matched += 0.8; break; }
+    }
+  }
+  return (matched / Math.max(tokensA.length, tokensB.length)) * 100;
+}
+
+/**
+ * Auto-conciliar solicitudes con transferencias BPA (canalEmision BANCAMOVIL-BPA),
+ * que NO traen CI ni codigo de transferencia. Regla menos estricta que la de BANDEC:
+ * tipo 'Cr' + monto exacto + cuenta + nombre similar >= 90% + fecha dentro de +-5 dias
+ * del creadoAt de la solicitud. Anti-ambiguedad: solo confirma si queda EXACTAMENTE un
+ * candidato; si hay varios se deja a revision manual para no confirmar al cliente equivocado.
+ */
+async function tryAutoMatchBpa(): Promise<number> {
+  const solicitudes = await prisma.solicitud.findMany({
+    where: {
+      workflowStatus: { not: 'cancelled' },
+      reconStatus: 'unmatched',
+    },
+  });
+
+  let matched = 0;
+  for (const sol of solicitudes) {
+    if (!sol.clienteCuenta || !sol.clienteNombre) continue;
+    const desde = new Date(sol.creadoAt.getTime() - BPA_VENTANA_DIAS * 86_400_000);
+    const hasta = new Date(sol.creadoAt.getTime() + BPA_VENTANA_DIAS * 86_400_000);
+
+    const candidatos = await prisma.transferencia.findMany({
+      where: {
+        solicitud: { is: null },
+        tipo: 'Cr',
+        canalEmision: BPA_CANAL,
+        importe: Number(sol.monto),
+        cuentaOrdenante: sol.clienteCuenta,
+        fecha: { gte: desde, lte: hasta },
+      },
+    });
+
+    const porNombre = candidatos.filter(
+      (t) => nameSimilarity(t.nombreOrdenante, sol.clienteNombre) >= BPA_NOMBRE_SIM_MIN
+    );
+    if (porNombre.length !== 1) continue; // 0 = sin match; >1 = ambiguo -> revision manual
+
+    const transfer = porNombre[0];
+    await prisma.solicitud.update({
+      where: { id: sol.id },
+      data: {
+        transferenciaId: transfer.id,
+        reconStatus: 'matched',
+        conciliadaAt: new Date(),
+        conciliadaPor: 'auto',
+        matchNivel: null,
+        sedeNotified: false,
+      },
+    });
+    await prisma.transferencia.update({
+      where: { id: transfer.id },
+      data: {
+        codigoConfirmacion: sol.codigo,
+        confirmedAt: new Date(),
+        confirmedBy: 'auto',
+        matchType: 'AUTO_BPA',
+      },
+    });
+    matched++;
+  }
   return matched;
 }
 
