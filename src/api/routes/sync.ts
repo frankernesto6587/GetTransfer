@@ -255,6 +255,7 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
 
       // If already matched, undo the match (unlink transferencia)
       const wasMatched = sol.reconStatus === 'matched';
+      const prevTransferenciaId = sol.transferenciaId;
 
       await prisma.solicitud.update({
         where: { codigo: event.solicitud_codigo },
@@ -273,8 +274,15 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
         },
       });
 
-      if (wasMatched) {
-        console.log(`[Sync] ANNULLED matched solicitud ${event.solicitud_codigo} — match undone`);
+      // Limpiar tambien la Transferencia vinculada: antes quedaba confirmada y
+      // huerfana (codigoConfirmacion/confirmedBy seguian puestos) y tryAutoMatch
+      // podia re-emparejarla con otra solicitud.
+      if (wasMatched && prevTransferenciaId) {
+        await prisma.transferencia.update({
+          where: { id: prevTransferenciaId },
+          data: { codigoConfirmacion: null, confirmedAt: null, confirmedBy: null },
+        });
+        console.log(`[Sync] ANNULLED matched solicitud ${event.solicitud_codigo} — match undone (transferencia ${prevTransferenciaId} liberada)`);
       }
       break;
     }

@@ -71,13 +71,6 @@ async function main() {
   await app.register(swaggerUi, { routePrefix: '/docs' });
   await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
 
-  // Reset confirmaciones (temporal, sin auth - eliminar después de usar)
-  app.post('/api/confirmar-odoo/reset-confirmaciones', async () => {
-    const { resetAllConfirmaciones } = await import('../db/repository');
-    const total = await resetAllConfirmaciones();
-    return { success: true, total_reseteados: total };
-  });
-
   // Global auth hook
   app.addHook('onRequest', jwtAuth);
 
