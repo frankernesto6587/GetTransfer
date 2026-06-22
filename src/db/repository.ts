@@ -93,30 +93,47 @@ export async function upsertMany(
   return { total: transfers.length, nuevas: result.count, nuevasList };
 }
 
+const BANDEC_PREFIX = 'KW';        // los codigos de BANDEC siempre empiezan por "KW"
+const AUTO_MATCH_MAX_DIAS = 7;     // solo se auto-concilian solicitudes recientes; las viejas quedan a revision manual
+
+/** Un transferCode es de BANDEC solo si empieza por "KW" (ignora espacios y mayus/minus). */
+function esCodigoBandec(code: string | null | undefined): code is string {
+  return !!code && code.trim().toUpperCase().startsWith(BANDEC_PREFIX);
+}
+
 /**
  * Auto-conciliar solicitudes pendientes con transferencias del banco.
  * Match estricto: monto exacto + transferCode/refOrigen + cuenta + CI (4 campos).
+ * Solo procesa solicitudes recientes (ventana AUTO_MATCH_MAX_DIAS): las viejas
+ * sin conciliar se dejan tal cual, a revision manual.
  */
 export async function tryAutoMatch(): Promise<number> {
+  const cutoff = new Date(Date.now() - AUTO_MATCH_MAX_DIAS * 86_400_000);
   const solicitudes = await prisma.solicitud.findMany({
     where: {
       workflowStatus: { not: 'cancelled' },
       reconStatus: 'unmatched',
       transferCode: { not: '' },
+      creadoAt: { gte: cutoff },
     },
   });
 
   let matched = 0;
   for (const sol of solicitudes) {
     if (!sol.transferCode) continue;
+    // Regla BANDEC: los codigos de BANDEC siempre empiezan por "KW". Una solicitud
+    // cuyo transferCode NO empieza por KW no puede casar con una transferencia BANDEC.
+    if (!esCodigoBandec(sol.transferCode)) continue;
     const transfer = await prisma.transferencia.findFirst({
       where: {
         solicitud: { is: null },
         tipo: 'Cr',
         importe: Number(sol.monto),
-        refOrigen: { equals: sol.transferCode, mode: 'insensitive' },
-        cuentaOrdenante: sol.clienteCuenta,
-        ciOrdenante: sol.clienteCi,
+        // trim(): los datos de la solicitud llegan a veces con espacios sobrantes
+        // (p.ej. clienteCi "12345678901 "), lo que rompia el match exacto.
+        refOrigen: { equals: sol.transferCode.trim(), mode: 'insensitive' },
+        cuentaOrdenante: sol.clienteCuenta.trim(),
+        ciOrdenante: sol.clienteCi.trim(),
       },
     });
     if (transfer) {
@@ -145,7 +162,7 @@ export async function tryAutoMatch(): Promise<number> {
   }
 
   // Pase 2: regla BPA (canal BANCAMOVIL-BPA; estos NO traen CI ni codigo).
-  matched += await tryAutoMatchBpa();
+  matched += await tryAutoMatchBpa(cutoff);
 
   return matched;
 }
@@ -183,20 +200,48 @@ export function nameSimilarity(a: string, b: string): number {
  * Auto-conciliar solicitudes con transferencias BPA (canalEmision BANCAMOVIL-BPA),
  * que NO traen CI ni codigo de transferencia. Regla menos estricta que la de BANDEC:
  * tipo 'Cr' + monto exacto + cuenta + nombre similar >= 90% + fecha dentro de +-5 dias
- * del creadoAt de la solicitud. Anti-ambiguedad: solo confirma si queda EXACTAMENTE un
- * candidato; si hay varios se deja a revision manual para no confirmar al cliente equivocado.
+ * del creadoAt de la solicitud.
+ *
+ * Cuando un cliente hace varios pagos identicos (misma cuenta+monto+nombre) y tiene
+ * varias solicitudes, hay multiples candidatos validos. En vez de descartarlos por
+ * ambiguedad, se emparejan 1:1 por CERCANIA DE FECHA: se procesan las solicitudes de
+ * la mas antigua a la mas reciente y cada una toma la transferencia disponible mas
+ * cercana a su creadoAt (la diferencia nunca excede +-5 dias, garantizado por la
+ * ventana de busqueda). Una transferencia ya asignada en esta pasada no se reutiliza.
  */
-async function tryAutoMatchBpa(): Promise<number> {
+async function tryAutoMatchBpa(cutoff: Date): Promise<number> {
   const solicitudes = await prisma.solicitud.findMany({
     where: {
       workflowStatus: { not: 'cancelled' },
       reconStatus: 'unmatched',
+      creadoAt: { gte: cutoff },
     },
+    orderBy: { creadoAt: 'asc' },
   });
 
   let matched = 0;
+  const usadas = new Set<number>(); // transferencias ya asignadas en esta pasada
   for (const sol of solicitudes) {
     if (!sol.clienteCuenta || !sol.clienteNombre) continue;
+
+    // BANDEC tiene prioridad sobre BPA: si la solicitud trae un codigo BANDEC ("KW...")
+    // y existe una transferencia que casa por refOrigen<->transferCode + monto (dominio
+    // del pase BANDEC), esta solicitud pertenece a BANDEC y NO se auto-confirma por BPA
+    // aunque haya un candidato; se deja al pase BANDEC / revision manual para no confirmar
+    // con la transferencia equivocada. (Los codigos no-KW, p.ej. BPA "BR...", no aplican.)
+    if (esCodigoBandec(sol.transferCode)) {
+      const bandec = await prisma.transferencia.findFirst({
+        where: {
+          solicitud: { is: null },
+          tipo: 'Cr',
+          importe: Number(sol.monto),
+          refOrigen: { equals: sol.transferCode.trim(), mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (bandec) continue;
+    }
+
     const desde = new Date(sol.creadoAt.getTime() - BPA_VENTANA_DIAS * 86_400_000);
     const hasta = new Date(sol.creadoAt.getTime() + BPA_VENTANA_DIAS * 86_400_000);
 
@@ -206,17 +251,27 @@ async function tryAutoMatchBpa(): Promise<number> {
         tipo: 'Cr',
         canalEmision: BPA_CANAL,
         importe: Number(sol.monto),
-        cuentaOrdenante: sol.clienteCuenta,
+        cuentaOrdenante: sol.clienteCuenta.trim(),
         fecha: { gte: desde, lte: hasta },
+        ...(usadas.size ? { id: { notIn: [...usadas] } } : {}),
       },
     });
 
     const porNombre = candidatos.filter(
       (t) => nameSimilarity(t.nombreOrdenante, sol.clienteNombre) >= BPA_NOMBRE_SIM_MIN
     );
-    if (porNombre.length !== 1) continue; // 0 = sin match; >1 = ambiguo -> revision manual
+    if (porNombre.length === 0) continue;
+
+    // Varios candidatos validos -> tomar el de fecha mas cercana al creadoAt
+    // (desempate por id para que sea determinista).
+    porNombre.sort((a, b) => {
+      const da = Math.abs(a.fecha.getTime() - sol.creadoAt.getTime());
+      const db = Math.abs(b.fecha.getTime() - sol.creadoAt.getTime());
+      return da - db || a.id - b.id;
+    });
 
     const transfer = porNombre[0];
+    usadas.add(transfer.id);
     await prisma.solicitud.update({
       where: { id: sol.id },
       data: {

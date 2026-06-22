@@ -7,13 +7,15 @@ import { Prisma } from '@prisma/client';
 // ── Zod schemas ──
 
 const solicitudFieldsSchema = z.object({
-  clienteNombre: z.string().default(''),
-  clienteCi: z.string().default(''),
-  clienteCuenta: z.string().default(''),
-  clienteTelefono: z.string().optional().default(''),
+  // .trim(): las sedes a veces envian estos campos con espacios sobrantes
+  // (p.ej. clienteCi "12345678901 "), lo que rompia el auto-match exacto.
+  clienteNombre: z.string().trim().default(''),
+  clienteCi: z.string().trim().default(''),
+  clienteCuenta: z.string().trim().default(''),
+  clienteTelefono: z.string().trim().optional().default(''),
   monto: z.number().positive(),
-  canalEmision: z.string().optional().default(''),
-  transferCode: z.string().optional().default(''),
+  canalEmision: z.string().trim().optional().default(''),
+  transferCode: z.string().trim().optional().default(''),
   notas: z.string().optional().default(''),
   fingerprint: z.string().optional().default(''),
   creadoPor: z.string().optional().default(''),
