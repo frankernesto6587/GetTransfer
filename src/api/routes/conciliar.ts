@@ -426,21 +426,15 @@ export async function conciliarRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'ci y new_name requeridos' });
     }
 
-    const { getOdooConfig } = await import('../../db/repository');
-    const config = await getOdooConfig();
-    if (!config.api_url || !config.api_key) {
-      return reply.status(502).send({ error: 'Odoo API no configurada' });
-    }
+    const { odooBearerFetch } = await import('../odoo-auth');
 
     try {
-      // 1. Rename partner in Odoo
-      const res = await fetch(`${config.api_url}/api/partners/rename-by-ci`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': config.api_key,
-        },
-        body: JSON.stringify({ ci: parsed.data.ci, new_name: parsed.data.new_name }),
+      // 1. Rename partner in Odoo.
+      // Los endpoints /api/partners/* NO aceptan X-API-Key (solo /api/pos/gettransfer/*):
+      // exigen Bearer token de login. odooBearerFetch lo obtiene y cachea.
+      const res = await odooBearerFetch('/api/partners/rename-by-ci', {
+        ci: parsed.data.ci,
+        new_name: parsed.data.new_name,
       });
 
       if (!res.ok) {
