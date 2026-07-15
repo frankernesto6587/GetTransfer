@@ -2,6 +2,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { customAlphabet } from 'nanoid';
 import { TransferenciaEntrada } from '../scraper/parser';
+import { classifyDebit } from '../scraper/debit-classifier';
 
 const generateCode = customAlphabet('23456789ABCDEFGHJKMNPQRSTUVWXYZ', 8);
 
@@ -39,10 +40,17 @@ function compositeKey(t: { refCorriente: string; refOrigen: string; importe: num
   return `${t.refCorriente}|${t.refOrigen}|${t.importe}|${t.fecha.toISOString().slice(0, 10)}|${t.tipo}`;
 }
 
+export type TransferenciaNueva = TransferenciaEntrada & { categoria: string };
+
 export async function upsertMany(
   transfers: TransferenciaEntrada[],
   opts?: { source?: string }
-): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaEntrada[] }> {
+): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaNueva[] }> {
+  const withCategoria: TransferenciaNueva[] = transfers.map(t => ({
+    ...t,
+    categoria: t.tipo === 'Db' ? classifyDebit(t.observacionesRaw, t.refCorriente) : '',
+  }));
+
   // Find which composite keys already exist
   const refs = transfers.map(t => t.refOrigen);
   const existing = await prisma.transferencia.findMany({
@@ -54,7 +62,7 @@ export async function upsertMany(
   const source = opts?.source || 'scraper';
 
   const result = await prisma.transferencia.createMany({
-    data: transfers.map(t => ({
+    data: withCategoria.map(t => ({
       fecha: t.fecha,
       refCorriente: t.refCorriente,
       refOrigen: t.refOrigen,
@@ -74,11 +82,12 @@ export async function upsertMany(
       fechaFactura: t.fechaFactura,
       formato: t.formato,
       observacionesRaw: t.observacionesRaw,
+      categoria: t.categoria,
     })),
     skipDuplicates: true,
   });
 
-  const nuevasList = transfers.filter(t => !existingKeys.has(compositeKey(t)));
+  const nuevasList = withCategoria.filter(t => !existingKeys.has(compositeKey(t)));
 
   // Auto-match new transfers with pending solicitudes
   if (result.count > 0) {
@@ -786,6 +795,10 @@ export async function updateMonitorConfig(data: {
   telegram_chat_id?: string | null;
   telegram_topic_id?: number | null;
   telegram_webhook_url?: string | null;
+  telegram_creditos_chat_id?: string | null;
+  telegram_creditos_topic_id?: number | null;
+  telegram_debitos_chat_id?: string | null;
+  telegram_debitos_topic_id?: number | null;
 }) {
   return prisma.monitorConfig.upsert({
     where: { id: 1 },

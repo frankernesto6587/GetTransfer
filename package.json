@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "backfill:categorias": "ts-node --transpile-only scripts/backfill-categorias.ts",
     "build": "tsc"
   },
   "keywords": [],

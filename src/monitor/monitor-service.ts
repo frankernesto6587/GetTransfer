@@ -1,17 +1,83 @@
-import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany } from '../db/repository';
-import { sendNotification, TelegramConfig } from './telegram';
+import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, TransferenciaNueva } from '../db/repository';
+import { sendNotification, sendBatch, TelegramConfig } from './telegram';
+import { formatCreditosList, formatDebitoMessage } from './format-messages';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
 import { launchBrowser } from '../scraper/browser';
 
-/** Format new transfers as compact list: "$monto - Nombre Apellido" */
-function formatNuevasList(nuevas: { nombreOrdenante: string; importe: number }[]): string {
-  return nuevas
-    .map(t => {
-      const parts = t.nombreOrdenante.split(/\s+/);
-      const nombre = parts.slice(0, 2).join(' ') || '???';
-      return `  $${t.importe.toLocaleString('es-CU')} - ${nombre}`;
-    })
-    .join('\n');
+// Tope de mensajes detallados de débitos por ciclo (evita avalanchas tras días offline
+// y mantiene el envío bajo el límite de ~20 msg/min por grupo de Telegram).
+const MAX_DEBITOS_DETALLADOS = 20;
+const DEBITOS_MUESTRA_SI_EXCESO = 10;
+
+interface DestinosConfig {
+  telegram_bot_token: string | null;
+  telegram_chat_id: string | null;
+  telegram_topic_id: number | null;
+  telegram_creditos_chat_id: string | null;
+  telegram_creditos_topic_id: number | null;
+  telegram_debitos_chat_id: string | null;
+  telegram_debitos_topic_id: number | null;
+}
+
+/**
+ * Destinos de notificación:
+ *  - creditos: grupo/tema registrado con /creditos (fallback al legacy /setchat
+ *    mientras no se configure, para no romper el comportamiento histórico).
+ *  - debitos: grupo/tema registrado con /debitos (SIN fallback: mudo hasta configurarlo).
+ *  - status: el legacy /setchat, único destino de los avisos online/offline del banco.
+ */
+export function resolveDestinos(config: DestinosConfig): {
+  creditos: TelegramConfig | null;
+  debitos: TelegramConfig | null;
+  status: TelegramConfig | null;
+} {
+  const token = config.telegram_bot_token;
+  if (!token) return { creditos: null, debitos: null, status: null };
+
+  const legacy: TelegramConfig | null = config.telegram_chat_id
+    ? { bot_token: token, chat_id: config.telegram_chat_id, topic_id: config.telegram_topic_id }
+    : null;
+
+  const creditos: TelegramConfig | null = config.telegram_creditos_chat_id
+    ? { bot_token: token, chat_id: config.telegram_creditos_chat_id, topic_id: config.telegram_creditos_topic_id }
+    : legacy;
+
+  const debitos: TelegramConfig | null = config.telegram_debitos_chat_id
+    ? { bot_token: token, chat_id: config.telegram_debitos_chat_id, topic_id: config.telegram_debitos_topic_id }
+    : null;
+
+  return { creditos, debitos, status: legacy };
+}
+
+/** Notifica créditos (lista resumida) y débitos (un mensaje por operación, con tope). */
+async function notifyNuevas(
+  destinos: { creditos: TelegramConfig | null; debitos: TelegramConfig | null },
+  nuevasList: TransferenciaNueva[]
+): Promise<void> {
+  const creditos = nuevasList.filter(t => t.tipo === 'Cr');
+  const debitos = nuevasList.filter(t => t.tipo === 'Db');
+
+  if (creditos.length > 0 && destinos.creditos) {
+    const plural = creditos.length > 1 ? 's' : '';
+    const message = `🆕 <b>${creditos.length} nueva${plural} transferencia${plural}</b>\n${formatCreditosList(creditos)}`;
+    await sendNotification(destinos.creditos, message);
+    console.log(`[Monitor] Telegram: ${creditos.length} créditos notificados`);
+  }
+
+  if (debitos.length > 0 && destinos.debitos) {
+    let detallados = debitos;
+    if (debitos.length > MAX_DEBITOS_DETALLADOS) {
+      const total = debitos.reduce((s, t) => s + t.importe, 0);
+      await sendNotification(
+        destinos.debitos,
+        `🔻 <b>${debitos.length} débitos nuevos</b> — total $${total.toLocaleString('es-CU', { minimumFractionDigits: 2 })}\n` +
+        `Demasiados para detallar: se muestran los primeros ${DEBITOS_MUESTRA_SI_EXCESO}. Revisa el panel para el resto.`
+      );
+      detallados = debitos.slice(0, DEBITOS_MUESTRA_SI_EXCESO);
+    }
+    const sent = await sendBatch(destinos.debitos, detallados.map(formatDebitoMessage));
+    console.log(`[Monitor] Telegram: ${sent}/${detallados.length} débitos notificados (${debitos.length} nuevos)`);
+  }
 }
 
 class MonitorService {
@@ -72,16 +138,15 @@ class MonitorService {
       }
 
       let scrapeMessage = '';
+      let nuevasList: TransferenciaNueva[] = [];
       if (check.online) {
         const ok = await navigateToOperaciones(page);
         if (ok) {
           const transfers = await scrapeDay(page, new Date());
           if (transfers.length > 0) {
             const result = await upsertMany(transfers);
+            nuevasList = result.nuevasList;
             scrapeMessage = `\n📊 ${transfers.length} operaciones hoy (${result.nuevas} nuevas)`;
-            if (result.nuevas > 0) {
-              scrapeMessage += '\n' + formatNuevasList(result.nuevasList);
-            }
           } else {
             scrapeMessage = '\n📊 Sin operaciones hoy';
           }
@@ -95,16 +160,17 @@ class MonitorService {
         fecha_contable: check.fechaContable,
       });
 
-      if (config.telegram_bot_token && config.telegram_chat_id) {
-        const telegramConfig: TelegramConfig = {
-          bot_token: config.telegram_bot_token,
-          chat_id: config.telegram_chat_id,
-          topic_id: config.telegram_topic_id,
-        };
+      const destinos = resolveDestinos(config);
+
+      if (destinos.status) {
         const message = check.online
           ? `🔍 <b>Chequeo manual - BANDEC Online</b>\nFecha contable: ${check.fechaContable || 'N/A'}${scrapeMessage}`
           : `🔍 <b>Chequeo manual - BANDEC Offline</b>\nÚltimo chequeo: ${new Date().toLocaleString('es-CU')}`;
-        await sendNotification(telegramConfig, message);
+        await sendNotification(destinos.status, message);
+      }
+
+      if (nuevasList.length > 0) {
+        await notifyNuevas(destinos, nuevasList);
       }
 
       const resultMsg = check.online
@@ -122,7 +188,7 @@ class MonitorService {
     }
   }
 
-  async scrapeMonth(month: number, year: number): Promise<{ total: number; nuevas: number; nuevasList: { nombreOrdenante: string; importe: number }[] }> {
+  async scrapeMonth(month: number, year: number): Promise<{ total: number; nuevas: number; nuevasList: TransferenciaNueva[] }> {
     if (this.running) {
       throw new Error('Chequeo anterior aún en curso, intenta de nuevo');
     }
@@ -149,7 +215,7 @@ class MonitorService {
       console.log(`[Scrape] Completado: ${transfers.length} transferencias`);
 
       let nuevas = 0;
-      let nuevasList: { nombreOrdenante: string; importe: number }[] = [];
+      let nuevasList: TransferenciaNueva[] = [];
       if (transfers.length > 0) {
         const result = await upsertMany(transfers);
         nuevas = result.nuevas;
@@ -193,9 +259,7 @@ class MonitorService {
 
       const statusChanged = previousStatus.online !== check.online;
       let scrapeMessage = '';
-      let nuevasCount = 0;
-
-      let nuevasList: { nombreOrdenante: string; importe: number }[] = [];
+      let nuevasList: TransferenciaNueva[] = [];
 
       if (check.online) {
         const ok = await navigateToOperaciones(page);
@@ -204,12 +268,8 @@ class MonitorService {
 
           if (transfers.length > 0) {
             const result = await upsertMany(transfers);
-            nuevasCount = result.nuevas;
             nuevasList = result.nuevasList;
             scrapeMessage = `\n📊 ${transfers.length} operaciones hoy (${result.nuevas} nuevas)`;
-            if (result.nuevas > 0) {
-              scrapeMessage += '\n' + formatNuevasList(result.nuevasList);
-            }
             console.log(`[Monitor] Scrape: ${transfers.length} transferencias, ${result.nuevas} nuevas`);
           } else {
             scrapeMessage = '\n📊 Sin operaciones hoy';
@@ -224,25 +284,19 @@ class MonitorService {
         fecha_contable: check.fechaContable,
       });
 
-      // Notify on status change or new transfers
-      if (config.telegram_bot_token && config.telegram_chat_id) {
-        const telegramConfig: TelegramConfig = {
-          bot_token: config.telegram_bot_token,
-          chat_id: config.telegram_chat_id,
-          topic_id: config.telegram_topic_id,
-        };
+      // Estado del banco al chat legacy; créditos y débitos a sus destinos propios
+      const destinos = resolveDestinos(config);
 
-        if (statusChanged) {
-          const message = check.online
-            ? `✅ <b>BANDEC Online</b>\nFecha contable: ${check.fechaContable || 'N/A'}${scrapeMessage}`
-            : `⚠️ <b>BANDEC Offline</b>\nÚltimo chequeo: ${new Date().toLocaleString('es-CU')}`;
-          await sendNotification(telegramConfig, message);
-          console.log(`[Monitor] Telegram: ${check.online ? 'Online' : 'Offline'}`);
-        } else if (nuevasCount > 0) {
-          const message = `🆕 <b>${nuevasCount} nueva${nuevasCount > 1 ? 's' : ''} transferencia${nuevasCount > 1 ? 's' : ''}</b>${scrapeMessage}`;
-          await sendNotification(telegramConfig, message);
-          console.log(`[Monitor] Telegram: ${nuevasCount} nuevas transferencias`);
-        }
+      if (statusChanged && destinos.status) {
+        const message = check.online
+          ? `✅ <b>BANDEC Online</b>\nFecha contable: ${check.fechaContable || 'N/A'}${scrapeMessage}`
+          : `⚠️ <b>BANDEC Offline</b>\nÚltimo chequeo: ${new Date().toLocaleString('es-CU')}`;
+        await sendNotification(destinos.status, message);
+        console.log(`[Monitor] Telegram: ${check.online ? 'Online' : 'Offline'}`);
+      }
+
+      if (nuevasList.length > 0) {
+        await notifyNuevas(destinos, nuevasList);
       }
 
       console.log(`[Monitor] Estado: ${check.online ? 'Online' : 'Offline'}${check.fechaContable ? ` (${check.fechaContable})` : ''}`);

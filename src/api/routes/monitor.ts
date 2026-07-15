@@ -1,22 +1,29 @@
 import { FastifyInstance } from 'fastify';
 import { getMonitorConfig, updateMonitorConfig, getBankStatus } from '../../db/repository';
-import { monitorService } from '../../monitor/monitor-service';
+import { monitorService, resolveDestinos } from '../../monitor/monitor-service';
 import { handleWebhookUpdate, registerWebhook, unregisterWebhook, getWebhookInfo, getBotInfo } from '../../monitor/telegram-bot';
 import { sendNotification } from '../../monitor/telegram';
+import { formatCreditosList } from '../../monitor/format-messages';
 import { requireRole } from '../middleware/auth';
 
 export async function monitorRoutes(fastify: FastifyInstance) {
+  const serializeConfig = (config: Awaited<ReturnType<typeof getMonitorConfig>>) => ({
+    enabled: config.enabled,
+    interval_minutes: config.interval_minutes,
+    telegram_bot_token: config.telegram_bot_token,
+    telegram_chat_id: config.telegram_chat_id,
+    telegram_topic_id: config.telegram_topic_id,
+    telegram_webhook_url: config.telegram_webhook_url,
+    telegram_creditos_chat_id: config.telegram_creditos_chat_id,
+    telegram_creditos_topic_id: config.telegram_creditos_topic_id,
+    telegram_debitos_chat_id: config.telegram_debitos_chat_id,
+    telegram_debitos_topic_id: config.telegram_debitos_topic_id,
+  });
+
   // GET /api/monitor/config
   fastify.get('/api/monitor/config', async () => {
     const config = await getMonitorConfig();
-    return {
-      enabled: config.enabled,
-      interval_minutes: config.interval_minutes,
-      telegram_bot_token: config.telegram_bot_token,
-      telegram_chat_id: config.telegram_chat_id,
-      telegram_topic_id: config.telegram_topic_id,
-      telegram_webhook_url: config.telegram_webhook_url,
-    };
+    return serializeConfig(config);
   });
 
   // PUT /api/monitor/config (admin only)
@@ -28,6 +35,10 @@ export async function monitorRoutes(fastify: FastifyInstance) {
       telegram_chat_id?: string | null;
       telegram_topic_id?: number | null;
       telegram_webhook_url?: string | null;
+      telegram_creditos_chat_id?: string | null;
+      telegram_creditos_topic_id?: number | null;
+      telegram_debitos_chat_id?: string | null;
+      telegram_debitos_topic_id?: number | null;
     };
 
     if (body.interval_minutes !== undefined && body.interval_minutes < 1) {
@@ -39,14 +50,7 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     // Restart monitor with new config
     await monitorService.restart();
 
-    return {
-      enabled: config.enabled,
-      interval_minutes: config.interval_minutes,
-      telegram_bot_token: config.telegram_bot_token,
-      telegram_chat_id: config.telegram_chat_id,
-      telegram_topic_id: config.telegram_topic_id,
-      telegram_webhook_url: config.telegram_webhook_url,
-    };
+    return serializeConfig(config);
   });
 
   // POST /api/monitor/webhook/register — register webhook with Telegram (admin only)
@@ -148,28 +152,27 @@ export async function monitorRoutes(fastify: FastifyInstance) {
     try {
       const { total, nuevas, nuevasList } = await monitorService.scrapeMonth(month, year);
 
-      // Notify via Telegram
+      // Notify via Telegram — solo resumen: los scrapes masivos de mes NUNCA
+      // mandan mensajes por-débito para no inundar el grupo.
       console.log(`[Scrape] Resultado: ${total} total, ${nuevas} nuevas`);
       const config = await getMonitorConfig();
-      if (config.telegram_bot_token && config.telegram_chat_id) {
+      const destinos = resolveDestinos(config);
+      if (destinos.creditos) {
         const monthNames = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
         const periodo = `${monthNames[month - 1]} ${year}`;
         let msg = nuevas > 0
           ? `🆕 <b>Scraping ${periodo} completado</b>\n📊 ${total} transferencias, <b>${nuevas} nuevas</b>`
           : `📋 <b>Scraping ${periodo} completado</b>\n📊 ${total} transferencias, 0 nuevas`;
-        if (nuevasList.length > 0) {
-          const list = nuevasList.map(t => {
-            const parts = t.nombreOrdenante.split(/\s+/);
-            const nombre = parts.slice(0, 2).join(' ') || '???';
-            return `  $${t.importe.toLocaleString('es-CU')} - ${nombre}`;
-          }).join('\n');
-          msg += '\n' + list;
+        const nuevosCreditos = nuevasList.filter(t => t.tipo === 'Cr');
+        const nuevosDebitos = nuevasList.filter(t => t.tipo === 'Db');
+        if (nuevosCreditos.length > 0) {
+          msg += '\n' + formatCreditosList(nuevosCreditos);
         }
-        await sendNotification({
-          bot_token: config.telegram_bot_token,
-          chat_id: config.telegram_chat_id,
-          topic_id: config.telegram_topic_id,
-        }, msg);
+        if (nuevosDebitos.length > 0) {
+          const totalDb = nuevosDebitos.reduce((s, t) => s + t.importe, 0);
+          msg += `\n🔻 ${nuevosDebitos.length} débitos nuevos ($${totalDb.toLocaleString('es-CU', { minimumFractionDigits: 2 })})`;
+        }
+        await sendNotification(destinos.creditos, msg);
       }
 
       return {

@@ -404,6 +404,8 @@ function MonitorTab({ setError }: { error?: string; setError: (e: string) => voi
   const [monitorForm, setMonitorForm] = useState({
     enabled: true, interval_minutes: 5,
     telegram_bot_token: '', telegram_chat_id: '', telegram_topic_id: '', telegram_webhook_url: '',
+    telegram_creditos_chat_id: '', telegram_creditos_topic_id: '',
+    telegram_debitos_chat_id: '', telegram_debitos_topic_id: '',
   })
   const [monitorSuccess, setMonitorSuccess] = useState('')
   const [checkingNow, setCheckingNow] = useState(false)
@@ -418,6 +420,10 @@ function MonitorTab({ setError }: { error?: string; setError: (e: string) => voi
         telegram_bot_token: config.telegram_bot_token || '', telegram_chat_id: config.telegram_chat_id || '',
         telegram_topic_id: config.telegram_topic_id ? String(config.telegram_topic_id) : '',
         telegram_webhook_url: config.telegram_webhook_url || '',
+        telegram_creditos_chat_id: config.telegram_creditos_chat_id || '',
+        telegram_creditos_topic_id: config.telegram_creditos_topic_id ? String(config.telegram_creditos_topic_id) : '',
+        telegram_debitos_chat_id: config.telegram_debitos_chat_id || '',
+        telegram_debitos_topic_id: config.telegram_debitos_topic_id ? String(config.telegram_debitos_topic_id) : '',
       })
       return { config, status }
     },
@@ -432,6 +438,10 @@ function MonitorTab({ setError }: { error?: string; setError: (e: string) => voi
         telegram_bot_token: monitorForm.telegram_bot_token || null, telegram_chat_id: monitorForm.telegram_chat_id || null,
         telegram_topic_id: monitorForm.telegram_topic_id ? parseInt(monitorForm.telegram_topic_id) : null,
         telegram_webhook_url: monitorForm.telegram_webhook_url || null,
+        telegram_creditos_chat_id: monitorForm.telegram_creditos_chat_id || null,
+        telegram_creditos_topic_id: monitorForm.telegram_creditos_topic_id ? parseInt(monitorForm.telegram_creditos_topic_id) : null,
+        telegram_debitos_chat_id: monitorForm.telegram_debitos_chat_id || null,
+        telegram_debitos_topic_id: monitorForm.telegram_debitos_topic_id ? parseInt(monitorForm.telegram_debitos_topic_id) : null,
       }
       return updateMonitorConfig(data)
     },
@@ -488,11 +498,33 @@ function MonitorTab({ setError }: { error?: string; setError: (e: string) => voi
             <h4 className="text-sm text-white font-medium mb-3 flex items-center gap-1.5"><Send size={14} className="text-gold" />Telegram</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div><label className="block text-xs text-tertiary uppercase mb-1.5">Bot Token</label><input type="text" value={monitorForm.telegram_bot_token} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_bot_token: e.target.value }))} className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
-              <div><label className="block text-xs text-tertiary uppercase mb-1.5">Chat ID</label><input type="text" value={monitorForm.telegram_chat_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_chat_id: e.target.value }))} className="w-full bg-page border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
             </div>
-            <div className="mt-3">
-              <label className="block text-xs text-tertiary uppercase mb-1.5">Topic ID (opcional)</label>
-              <input type="text" value={monitorForm.telegram_topic_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_topic_id: e.target.value }))} className="w-full md:w-64 bg-page border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" />
+            <p className="text-xs text-tertiary mt-3">También puedes escribir <span className="font-mono text-gold">/creditos</span> o <span className="font-mono text-gold">/debitos</span> en el grupo/tema deseado y el destino se configura solo.</p>
+
+            <div className="mt-4 p-3 rounded-lg bg-page border border-border">
+              <h5 className="text-xs text-white font-medium mb-2">Destino general — estado del banco (online/offline)</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Chat ID</label><input type="text" value={monitorForm.telegram_chat_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_chat_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Topic ID (opcional)</label><input type="text" value={monitorForm.telegram_topic_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_topic_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+              </div>
+            </div>
+
+            <div className="mt-3 p-3 rounded-lg bg-page border border-border">
+              <h5 className="text-xs text-white font-medium mb-2">Destino Créditos — lista de transferencias recibidas</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Chat ID</label><input type="text" value={monitorForm.telegram_creditos_chat_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_creditos_chat_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Topic ID (opcional)</label><input type="text" value={monitorForm.telegram_creditos_topic_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_creditos_topic_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+              </div>
+              <p className="text-xs text-tertiary mt-2">Si está vacío, los créditos siguen llegando al destino general.</p>
+            </div>
+
+            <div className="mt-3 p-3 rounded-lg bg-page border border-border">
+              <h5 className="text-xs text-white font-medium mb-2">Destino Débitos — un mensaje detallado por operación</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Chat ID</label><input type="text" value={monitorForm.telegram_debitos_chat_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_debitos_chat_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+                <div><label className="block text-xs text-tertiary uppercase mb-1.5">Topic ID (opcional)</label><input type="text" value={monitorForm.telegram_debitos_topic_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_debitos_topic_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
+              </div>
+              <p className="text-xs text-tertiary mt-2">Si está vacío, no se envían notificaciones de débitos.</p>
             </div>
 
             <div className="mt-4 pt-4 border-t border-border">

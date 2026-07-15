@@ -16,6 +16,14 @@ interface TelegramUpdate {
   };
 }
 
+const WELCOME_MESSAGE_COMMANDS =
+  `Estos son los comandos disponibles:\n\n` +
+  `🔹 /creditos — Recibir aquí las notificaciones de CRÉDITOS (transferencias recibidas, lista resumida)\n` +
+  `🔹 /debitos — Recibir aquí las notificaciones de DÉBITOS (un mensaje detallado por operación)\n` +
+  `🔹 /setchat — Destino general/legacy (estado del banco: online/offline)\n` +
+  `🔹 /settopic — Tema para el destino general\n\n` +
+  `Escribe /creditos o /debitos dentro del grupo o tema donde quieras recibirlas.`;
+
 async function processCommand(update: TelegramUpdate) {
   const msg = update.message;
   if (!msg?.text) return;
@@ -24,6 +32,29 @@ async function processCommand(update: TelegramUpdate) {
   if (!config.telegram_bot_token) return;
 
   const command = msg.text.split('@')[0].trim();
+
+  // /creditos y /debitos registran el chat+tema donde se escriben como destino
+  // de las notificaciones de ese tipo (el tema se captura solo, sin paso extra).
+  if (command === '/creditos' || command === '/debitos') {
+    const esCreditos = command === '/creditos';
+    const chatId = String(msg.chat.id);
+    const topicId = msg.message_thread_id || null;
+
+    await updateMonitorConfig(esCreditos
+      ? { telegram_creditos_chat_id: chatId, telegram_creditos_topic_id: topicId }
+      : { telegram_debitos_chat_id: chatId, telegram_debitos_topic_id: topicId });
+
+    const tipo = esCreditos ? 'CRÉDITOS' : 'DÉBITOS';
+    const detalle = esCreditos
+      ? 'Aquí llegará la lista de transferencias recibidas.'
+      : 'Aquí llegará un mensaje detallado por cada débito detectado.';
+    await sendNotification(
+      { bot_token: config.telegram_bot_token, chat_id: chatId, topic_id: topicId },
+      `✅ <b>Destino de ${tipo} configurado</b>\n` +
+      `Chat: <code>${chatId}</code>${topicId ? `\nTema: <code>${topicId}</code>` : ''}\n${detalle}`
+    );
+    console.log(`[TelegramBot] Destino ${tipo} configurado: chat=${chatId}, topic=${topicId}`);
+  }
 
   if (command === '/setchat') {
     const chatId = String(msg.chat.id);
@@ -75,11 +106,7 @@ async function processNewMember(update: TelegramUpdate) {
 
       await sendNotification(
         { bot_token: config.telegram_bot_token, chat_id: chatId },
-        `👋 <b>¡Hola!</b> Gracias por agregarme a <b>${chatName}</b>.\n\n` +
-        `Estos son los comandos disponibles:\n\n` +
-        `🔹 /setchat — Configura este chat para recibir notificaciones del monitor BANDEC\n` +
-        `🔹 /settopic — Configura un tema específico dentro de un supergrupo para las notificaciones\n\n` +
-        `Empieza con /setchat para activar las notificaciones aquí.`
+        `👋 <b>¡Hola!</b> Gracias por agregarme a <b>${chatName}</b>.\n\n${WELCOME_MESSAGE_COMMANDS}`
       );
       console.log(`[TelegramBot] Bot agregado al grupo: ${chatName} (${chatId})`);
     }
@@ -93,11 +120,7 @@ async function processNewMember(update: TelegramUpdate) {
 
     await sendNotification(
       { bot_token: config.telegram_bot_token, chat_id: chatId },
-      `👋 <b>¡Hola!</b> Gracias por agregarme a <b>${chatName}</b>.\n\n` +
-      `Estos son los comandos disponibles:\n\n` +
-      `🔹 /setchat — Configura este chat para recibir notificaciones del monitor BANDEC\n` +
-      `🔹 /settopic — Configura un tema específico dentro de un supergrupo para las notificaciones\n\n` +
-      `Empieza con /setchat para activar las notificaciones aquí.`
+      `👋 <b>¡Hola!</b> Gracias por agregarme a <b>${chatName}</b>.\n\n${WELCOME_MESSAGE_COMMANDS}`
     );
     console.log(`[TelegramBot] Bot agregado al grupo (my_chat_member): ${chatName} (${chatId})`);
   }

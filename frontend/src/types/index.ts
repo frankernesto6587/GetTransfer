@@ -80,6 +80,10 @@ export interface MonitorConfig {
   telegram_chat_id: string | null
   telegram_topic_id: number | null
   telegram_webhook_url: string | null
+  telegram_creditos_chat_id: string | null
+  telegram_creditos_topic_id: number | null
+  telegram_debitos_chat_id: string | null
+  telegram_debitos_topic_id: number | null
 }
 
 export interface WebhookInfo {

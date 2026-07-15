@@ -67,3 +67,18 @@ export async function sendNotification(config: TelegramConfig, message: string):
   console.error(`[Telegram] FALLO definitivo después de 3 intentos`);
   return false;
 }
+
+/**
+ * Envía varios mensajes en secuencia con pausa entre ellos.
+ * Telegram limita ~20 msg/min por grupo: con 2s de spacing y el tope de
+ * mensajes por tick del monitor no se alcanza el límite.
+ */
+export async function sendBatch(config: TelegramConfig, messages: string[], delayMs = 2000): Promise<number> {
+  let sent = 0;
+  for (let i = 0; i < messages.length; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, delayMs));
+    const ok = await sendNotification(config, messages[i]);
+    if (ok) sent++;
+  }
+  return sent;
+}
