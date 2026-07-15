@@ -68,13 +68,14 @@ export function ConciliarView() {
   const [filterCi, setFilterCi] = useState('')
   const [filterCuenta, setFilterCuenta] = useState('')
   const [filterCanal, setFilterCanal] = useState('')
+  const [filterEstado, setFilterEstado] = useState('')
   const [fechaDesde, setFechaDesde] = useState(firstOfMonth())
   const [fechaHasta, setFechaHasta] = useState(today())
   const [activePreset, setActivePreset] = useState<DatePresetKey | ''>('month')
 
   const transfer = pendientes[currentIndex] ?? null
 
-  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; fechaDesde?: string; fechaHasta?: string }) => {
+  const loadPendientes = useCallback(async (filters?: { nombre?: string; ci?: string; cuenta?: string; canal?: string; estado?: string; fechaDesde?: string; fechaHasta?: string }) => {
     setLoading(true)
     setError('')
     setCandidates([])
@@ -101,17 +102,18 @@ export function ConciliarView() {
     if (filterCi) f.ci = filterCi
     if (filterCuenta) f.cuenta = filterCuenta
     if (filterCanal) f.canal = filterCanal
+    if (filterEstado) f.estado = filterEstado
     if (fechaDesde) f.fechaDesde = fechaDesde
     if (fechaHasta) f.fechaHasta = fechaHasta
     return Object.keys(f).length > 0 ? f : undefined
-  }, [filterNombre, filterCi, filterCuenta, filterCanal, fechaDesde, fechaHasta])
+  }, [filterNombre, filterCi, filterCuenta, filterCanal, filterEstado, fechaDesde, fechaHasta])
 
   const debouncedReload = useDebouncedCallback((filters?: Record<string, string | undefined>) => {
     loadPendientes(filters)
   }, 300)
 
   const clearFilters = useCallback(() => {
-    setFilterNombre(''); setFilterCi(''); setFilterCuenta(''); setFilterCanal('')
+    setFilterNombre(''); setFilterCi(''); setFilterCuenta(''); setFilterCanal(''); setFilterEstado('')
     setFechaDesde(firstOfMonth()); setFechaHasta(today()); setActivePreset('month')
     loadPendientes({ fechaDesde: firstOfMonth(), fechaHasta: today() })
   }, [loadPendientes])
@@ -226,7 +228,7 @@ export function ConciliarView() {
 
       {/* Filter bar */}
       <FilterBar
-        activeFilterCount={[filterNombre, filterCi, filterCuenta, filterCanal].filter(Boolean).length}
+        activeFilterCount={[filterNombre, filterCi, filterCuenta, filterCanal, filterEstado].filter(Boolean).length}
         onClear={clearFilters}
         resultCount={pendientes.length}
         resultLabel="pendientes"
@@ -262,6 +264,14 @@ export function ConciliarView() {
                 { value: 'TRANSFERMOVIL', label: 'TRANSFERMOVIL' },
               ]}
               allLabel="Todos los canales"
+              className="w-full md:w-44" />
+            <FilterSelect value={filterEstado}
+              onChange={(v) => { setFilterEstado(v); loadPendientes({ ...currentFilters(), estado: v || undefined }) }}
+              options={[
+                { value: 'revision', label: 'En revisión' },
+                { value: 'todos', label: 'Todas (incl. marcadas)' },
+              ]}
+              allLabel="Pendientes"
               className="w-full md:w-44" />
           </>
         }

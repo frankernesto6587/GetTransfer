@@ -695,10 +695,11 @@ export const solicitudesQuery = (params: SolicitudesParams) => {
 }
 
 export async function getPendientesBancoConciliar(filters?: {
-  nombre?: string; ci?: string; cuenta?: string; canal?: string;
+  nombre?: string; ci?: string; cuenta?: string; canal?: string; estado?: string;
   fechaDesde?: string; fechaHasta?: string; page?: number; limit?: number
 }): Promise<PendientesResponse> {
   const params = new URLSearchParams()
+  if (filters?.estado) params.set('estado', filters.estado)
   if (filters?.nombre) params.set('nombre', filters.nombre)
   if (filters?.ci) params.set('ci', filters.ci)
   if (filters?.cuenta) params.set('cuenta', filters.cuenta)

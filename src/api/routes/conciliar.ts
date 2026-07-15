@@ -247,6 +247,15 @@ export async function conciliarRoutes(app: FastifyInstance) {
       tipo: 'Cr',
     };
 
+    // estado: pendiente (default) = sin código asignado; revision = marcadas
+    // REVIEW_REQUIRED; todos = también las ya marcadas depósito/compra.
+    const estado = q.estado || 'pendiente';
+    if (estado === 'pendiente') {
+      where.codigoConfirmacion = null;
+    } else if (estado === 'revision') {
+      where.matchType = 'REVIEW_REQUIRED';
+    }
+
     if (q.nombre) where.nombreOrdenante = { contains: q.nombre, mode: 'insensitive' };
     if (q.ci) where.ciOrdenante = { contains: q.ci, mode: 'insensitive' };
     if (q.cuenta) where.cuentaOrdenante = { contains: q.cuenta, mode: 'insensitive' };
@@ -374,8 +383,13 @@ export async function conciliarRoutes(app: FastifyInstance) {
     // Import the specialAction from repository
     const { specialAction } = await import('../../db/repository');
     const user = (request as any).user;
-    const result = await specialAction(id, accion, user?.name);
-    return result;
+    try {
+      const result = await specialAction(id, accion, user?.name);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      return reply.status(409).send({ error: message });
+    }
   });
 
   // ── Undo reconciliation (by transferencia ID) ──
