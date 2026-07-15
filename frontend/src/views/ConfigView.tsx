@@ -515,7 +515,7 @@ function MonitorTab({ setError }: { error?: string; setError: (e: string) => voi
                 <div><label className="block text-xs text-tertiary uppercase mb-1.5">Chat ID</label><input type="text" value={monitorForm.telegram_creditos_chat_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_creditos_chat_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
                 <div><label className="block text-xs text-tertiary uppercase mb-1.5">Topic ID (opcional)</label><input type="text" value={monitorForm.telegram_creditos_topic_id} onChange={(e) => setMonitorForm(f => ({ ...f, telegram_creditos_topic_id: e.target.value }))} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white font-mono" /></div>
               </div>
-              <p className="text-xs text-tertiary mt-2">Si está vacío, los créditos siguen llegando al destino general.</p>
+              <p className="text-xs text-tertiary mt-2">Si está vacío, no se envían notificaciones de créditos.</p>
             </div>
 
             <div className="mt-3 p-3 rounded-lg bg-page border border-border">

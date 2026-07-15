@@ -21,9 +21,8 @@ interface DestinosConfig {
 
 /**
  * Destinos de notificación:
- *  - creditos: grupo/tema registrado con /creditos (fallback al legacy /setchat
- *    mientras no se configure, para no romper el comportamiento histórico).
- *  - debitos: grupo/tema registrado con /debitos (SIN fallback: mudo hasta configurarlo).
+ *  - creditos: grupo/tema registrado con /creditos (sin destino = no se notifica).
+ *  - debitos: grupo/tema registrado con /debitos (sin destino = no se notifica).
  *  - status: el legacy /setchat, único destino de los avisos online/offline del banco.
  */
 export function resolveDestinos(config: DestinosConfig): {
@@ -40,7 +39,7 @@ export function resolveDestinos(config: DestinosConfig): {
 
   const creditos: TelegramConfig | null = config.telegram_creditos_chat_id
     ? { bot_token: token, chat_id: config.telegram_creditos_chat_id, topic_id: config.telegram_creditos_topic_id }
-    : legacy;
+    : null;
 
   const debitos: TelegramConfig | null = config.telegram_debitos_chat_id
     ? { bot_token: token, chat_id: config.telegram_debitos_chat_id, topic_id: config.telegram_debitos_topic_id }

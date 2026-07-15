@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "backfill:categorias": "ts-node --transpile-only scripts/backfill-categorias.ts",
+    "notify:debitos-mes": "ts-node --transpile-only scripts/notify-debitos-mes.ts",
     "build": "tsc"
   },
   "keywords": [],
