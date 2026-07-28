@@ -201,6 +201,20 @@ export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEn
     console.error(`scrapeDay debitos error (${dateStr}): ${err.message?.substring(0, 80)}`);
   }
 
+  // DIAG-SALDO: buscar cualquier "Saldo" en TODA la página (fuera de la tabla de ops)
+  try {
+    const saldos = await page.evaluate(() => {
+      const out: string[] = [];
+      const seen = new Set<string>();
+      document.querySelectorAll('td, span, div, label, th').forEach(el => {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (t && /saldo/i.test(t) && t.length < 120 && !seen.has(t)) { seen.add(t); out.push(t); }
+      });
+      return out.slice(0, 25);
+    });
+    console.log(`[Scrape][DIAG-PAGESALDO] ${JSON.stringify(saldos)}`);
+  } catch { /* noop */ }
+
   return [...creditos, ...debitos];
 }
 
