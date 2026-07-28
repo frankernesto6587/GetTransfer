@@ -43,8 +43,8 @@ const DEBIT_HEADERS: Record<DebitCategoria, { icon: string; title: string }> = {
   OTRO: { icon: '❓', title: 'Débito' },
 };
 
-/** Mensaje HTML detallado para UN débito, según su categoría. */
-export function formatDebitoMessage(t: TransferenciaEntrada): string {
+/** Mensaje HTML detallado para UN débito, según su categoría. `saldo` opcional = saldo de la cuenta tras la operación. */
+export function formatDebitoMessage(t: TransferenciaEntrada, saldo?: number | null): string {
   const det = parseDebitDetails(t.observacionesRaw, t.refCorriente);
   const { icon, title } = DEBIT_HEADERS[det.categoria];
 
@@ -100,6 +100,10 @@ export function formatDebitoMessage(t: TransferenciaEntrada): string {
 
     default:
       if (det.descripcion) lines.push(`📝 ${escapeHtml(det.descripcion)}`);
+  }
+
+  if (saldo != null) {
+    lines.push(`💵 <b>Saldo tras la operación: $${fmtImporte(saldo)}</b>`);
   }
 
   return lines.join('\n');

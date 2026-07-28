@@ -9,7 +9,7 @@
  *   pnpm notify:debitos-mes -- --dry                  # imprime sin enviar
  */
 import 'dotenv/config';
-import { prisma, getMonitorConfig } from '../src/db/repository';
+import { prisma, getMonitorConfig, getSaldoDespues } from '../src/db/repository';
 import { formatDebitoMessage } from '../src/monitor/format-messages';
 import { sendNotification, sendBatch } from '../src/monitor/telegram';
 import { TransferenciaEntrada } from '../src/scraper/parser';
@@ -42,7 +42,10 @@ async function main() {
     return;
   }
 
-  const mensajes = debitos.map(d => formatDebitoMessage(d as unknown as TransferenciaEntrada));
+  const mensajes = await Promise.all(debitos.map(async d => {
+    const saldo = await getSaldoDespues(d.fecha, d.refCorriente).catch(() => null);
+    return formatDebitoMessage(d as unknown as TransferenciaEntrada, saldo);
+  }));
   const total = debitos.reduce((s, d) => s + d.importe, 0);
   const encabezado = `📋 <b>Débitos de ${String(month).padStart(2, '0')}/${year}</b> — ${debitos.length} operaciones, total $${total.toLocaleString('es-CU', { minimumFractionDigits: 2 })}`;
 

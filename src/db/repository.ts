@@ -830,6 +830,43 @@ export async function updateBankStatus(data: {
   });
 }
 
+// ── DailyBalance (saldo de apertura/cierre del banco por día) ──
+
+/** Normaliza una fecha a medianoche UTC (igual clave que Transferencia.fecha). */
+function diaUTC(fecha: Date): Date {
+  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+}
+
+export async function upsertDailyBalance(fecha: Date, saldoApertura: number | null, saldoCierre: number | null) {
+  if (saldoApertura == null) return; // sin apertura no sirve de ancla
+  const dia = diaUTC(fecha);
+  await prisma.dailyBalance.upsert({
+    where: { fecha: dia },
+    create: { fecha: dia, saldoApertura, saldoCierre },
+    update: { saldoApertura, saldoCierre },
+  });
+}
+
+/**
+ * Saldo de la cuenta justo después de la operación `refCorriente` de ese día.
+ * saldo = apertura_del_día + Σ(Cr−Db de las operaciones del día con refCorriente <= ref).
+ * Devuelve null si no hay saldo de apertura capturado para ese día.
+ * (Validado contra el "Saldo Contable Final" real del banco.)
+ */
+export async function getSaldoDespues(fecha: Date, refCorriente: string): Promise<number | null> {
+  const dia = diaUTC(fecha);
+  const daily = await prisma.dailyBalance.findUnique({ where: { fecha: dia } });
+  if (!daily) return null;
+
+  const finDia = new Date(dia.getTime() + 86_400_000);
+  const rows = await prisma.transferencia.findMany({
+    where: { fecha: { gte: dia, lt: finDia }, refCorriente: { lte: refCorriente } },
+    select: { importe: true, tipo: true },
+  });
+  const acumulado = rows.reduce((s, r) => s + (r.tipo === 'Cr' ? r.importe : -r.importe), 0);
+  return Math.round((daily.saldoApertura + acumulado) * 100) / 100;
+}
+
 // ── User ──
 
 export async function getUserByEmail(email: string) {

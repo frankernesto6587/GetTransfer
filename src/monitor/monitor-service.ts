@@ -1,4 +1,4 @@
-import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, TransferenciaNueva } from '../db/repository';
+import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, getSaldoDespues, TransferenciaNueva } from '../db/repository';
 import { sendNotification, sendBatch, TelegramConfig } from './telegram';
 import { formatCreditosList, formatDebitoMessage, escapeHtml } from './format-messages';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
@@ -88,7 +88,11 @@ async function notifyNuevas(
       );
       detallados = debitos.slice(0, DEBITOS_MUESTRA_SI_EXCESO);
     }
-    const sent = await sendBatch(destinos.debitos, detallados.map(formatDebitoMessage));
+    const mensajes = await Promise.all(detallados.map(async t => {
+      const saldo = await getSaldoDespues(t.fecha, t.refCorriente).catch(() => null);
+      return formatDebitoMessage(t, saldo);
+    }));
+    const sent = await sendBatch(destinos.debitos, mensajes);
     console.log(`[Monitor] Telegram: ${sent}/${detallados.length} débitos notificados (${debitos.length} nuevos)`);
   }
 }

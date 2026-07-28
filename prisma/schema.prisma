@@ -82,6 +82,13 @@ model OdooConfig {
   updatedAt   DateTime @updatedAt
 }
 
+model DailyBalance {
+  fecha         DateTime @id       // día (medianoche UTC), igual que Transferencia.fecha
+  saldoApertura Float              // "Saldo Contable Anterior" del banco
+  saldoCierre   Float?             // "Saldo Contable Final" del banco (validación)
+  updatedAt     DateTime @updatedAt
+}
+
 model BankStatus {
   id             Int       @id @default(1)
   online         Boolean   @default(false)

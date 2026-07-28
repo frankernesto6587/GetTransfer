@@ -1,5 +1,6 @@
 import { Page } from 'playwright';
-import { TransferenciaEntrada, parseOperacionRow } from '../scraper/parser';
+import { TransferenciaEntrada, parseOperacionRow, convertFecha } from '../scraper/parser';
+import { upsertDailyBalance } from '../db/repository';
 
 const ACCOUNT = '0659834001469612';
 
@@ -125,24 +126,43 @@ function extractRows(page: Page): Promise<string[][]> {
 
 function parseRows(rows: string[][]): TransferenciaEntrada[] {
   const results: TransferenciaEntrada[] = [];
-  let loggedShape = false;
   for (const row of rows) {
     if (row.length < 6) continue;
     if (!row[0] || row[0] === '') continue;
-    if (row[3]?.includes('Saldo')) {
-      // DIAG-SALDO: volcar filas de saldo para diseñar la captura del saldo por operación
-      console.log(`[Scrape][DIAG-SALDO] cells=${row.length} ${JSON.stringify(row)}`);
-      continue;
-    }
-    if (!loggedShape) {
-      // DIAG-SALDO: forma de la primera fila de operación (¿hay columna de saldo extra?)
-      console.log(`[Scrape][DIAG-OPSHAPE] cells=${row.length} ${JSON.stringify(row)}`);
-      loggedShape = true;
-    }
+    if (row[3]?.includes('Saldo')) continue;
     const parsed = parseOperacionRow(row);
     if (parsed) results.push(parsed);
   }
   return results;
+}
+
+function parseMonto(v: string): number | null {
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+/** Lee el panel de saldos del banco (apertura/cierre) de la página de operaciones. */
+async function extractSaldoPanel(page: Page): Promise<{ apertura: number | null; cierre: number | null }> {
+  try {
+    const raw = await page.evaluate(() => {
+      const out: Record<string, string> = {};
+      document.querySelectorAll('td, span, div, label, th, b, strong').forEach(el => {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (/^Saldo .{0,40}:$/i.test(t)) {
+          const sib = (el as HTMLElement).nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim() || '';
+          const par = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
+          out[t] = sib || par;
+        }
+      });
+      return out;
+    });
+    return {
+      apertura: parseMonto(raw['Saldo Contable Anterior:'] || ''),
+      cierre: parseMonto(raw['Saldo Contable Final:'] || ''),
+    };
+  } catch {
+    return { apertura: null, cierre: null };
+  }
 }
 
 export async function navigateToOperaciones(page: Page): Promise<boolean> {
@@ -201,22 +221,17 @@ export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEn
     console.error(`scrapeDay debitos error (${dateStr}): ${err.message?.substring(0, 80)}`);
   }
 
-  // DIAG-SALDO: capturar etiqueta de saldo + su valor (celda/hermano adyacente)
+  // Captura el saldo de apertura/cierre del día (ancla para el saldo por operación)
   try {
-    const saldos = await page.evaluate(() => {
-      const out: Record<string, string> = {};
-      document.querySelectorAll('td, span, div, label, th, b, strong').forEach(el => {
-        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-        if (/^Saldo .{0,40}:$/i.test(t)) {
-          const sib = (el as HTMLElement).nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim() || '';
-          const par = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
-          out[t] = sib || par;
-        }
-      });
-      return out;
-    });
-    console.log(`[Scrape][DIAG-PAGESALDO2] ${JSON.stringify(saldos)}`);
-  } catch { /* noop */ }
+    const { apertura, cierre } = await extractSaldoPanel(page);
+    if (apertura != null) {
+      const fechaDia = new Date(convertFecha(dateStr) + 'T00:00:00Z');
+      await upsertDailyBalance(fechaDia, apertura, cierre);
+      console.log(`[Scrape] Saldo ${dateStr}: apertura=${apertura} cierre=${cierre ?? 'N/A'}`);
+    }
+  } catch (err: any) {
+    console.error(`scrapeDay saldo error (${dateStr}): ${err.message?.substring(0, 80)}`);
+  }
 
   return [...creditos, ...debitos];
 }
