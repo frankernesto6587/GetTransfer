@@ -201,18 +201,21 @@ export async function scrapeDay(page: Page, date: Date): Promise<TransferenciaEn
     console.error(`scrapeDay debitos error (${dateStr}): ${err.message?.substring(0, 80)}`);
   }
 
-  // DIAG-SALDO: buscar cualquier "Saldo" en TODA la página (fuera de la tabla de ops)
+  // DIAG-SALDO: capturar etiqueta de saldo + su valor (celda/hermano adyacente)
   try {
     const saldos = await page.evaluate(() => {
-      const out: string[] = [];
-      const seen = new Set<string>();
-      document.querySelectorAll('td, span, div, label, th').forEach(el => {
+      const out: Record<string, string> = {};
+      document.querySelectorAll('td, span, div, label, th, b, strong').forEach(el => {
         const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-        if (t && /saldo/i.test(t) && t.length < 120 && !seen.has(t)) { seen.add(t); out.push(t); }
+        if (/^Saldo .{0,40}:$/i.test(t)) {
+          const sib = (el as HTMLElement).nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim() || '';
+          const par = (el.parentElement?.textContent || '').replace(/\s+/g, ' ').trim();
+          out[t] = sib || par;
+        }
       });
-      return out.slice(0, 25);
+      return out;
     });
-    console.log(`[Scrape][DIAG-PAGESALDO] ${JSON.stringify(saldos)}`);
+    console.log(`[Scrape][DIAG-PAGESALDO2] ${JSON.stringify(saldos)}`);
   } catch { /* noop */ }
 
   return [...creditos, ...debitos];
