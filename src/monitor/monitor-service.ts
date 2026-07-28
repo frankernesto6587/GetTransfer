@@ -1,6 +1,6 @@
 import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, TransferenciaNueva } from '../db/repository';
 import { sendNotification, sendBatch, TelegramConfig } from './telegram';
-import { formatCreditosList, formatDebitoMessage } from './format-messages';
+import { formatCreditosList, formatDebitoMessage, escapeHtml } from './format-messages';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
 import { launchBrowser } from '../scraper/browser';
 
@@ -8,6 +8,20 @@ import { launchBrowser } from '../scraper/browser';
 // y mantiene el envío bajo el límite de ~20 msg/min por grupo de Telegram).
 const MAX_DEBITOS_DETALLADOS = 20;
 const DEBITOS_MUESTRA_SI_EXCESO = 10;
+
+// Anti-spam de alertas del scraper: solo avisa cuando el fallo es sostenido
+// (N ciclos seguidos ≈ N*intervalo), no en cada blip de conectividad.
+const ALERTAR_SCRAPER_TRAS_FALLOS = 3;
+
+/** Traduce el error crudo de Playwright a un mensaje entendible. */
+function describirErrorScraper(msg: string): string {
+  if (/ERR_NAME_NOT_RESOLVED/i.test(msg)) return 'No se pudo resolver bandec.cu (DNS). El servidor no está alcanzando al banco.';
+  if (/ERR_CONNECTION_RESET|ERR_CONNECTION_REFUSED|ECONNRESET|ECONNREFUSED/i.test(msg)) return 'Conexión con el banco reseteada o rechazada.';
+  if (/ERR_INTERNET_DISCONNECTED|ERR_NETWORK/i.test(msg)) return 'Sin conexión a internet desde el servidor.';
+  if (/timeout/i.test(msg)) return 'El banco no respondió a tiempo (timeout).';
+  if (/login fallido/i.test(msg)) return 'Falló el login en BANDEC.';
+  return msg.slice(0, 200);
+}
 
 interface DestinosConfig {
   telegram_bot_token: string | null;
@@ -82,6 +96,43 @@ async function notifyNuevas(
 class MonitorService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private scraperFailStreak = 0;      // ciclos consecutivos con fallo de scraper
+  private scraperAlertSent = false;   // ya se notificó el episodio de fallo actual
+
+  /** Registra un fallo del scraper y notifica por Telegram si es sostenido. */
+  private async onScraperError(rawMsg: string) {
+    this.scraperFailStreak++;
+    if (this.scraperFailStreak < ALERTAR_SCRAPER_TRAS_FALLOS || this.scraperAlertSent) return;
+    this.scraperAlertSent = true;
+    try {
+      const destinos = resolveDestinos(await getMonitorConfig());
+      if (destinos.status) {
+        await sendNotification(destinos.status,
+          `🔴 <b>Scraper BANDEC con fallos</b>\n${escapeHtml(describirErrorScraper(rawMsg))}\n` +
+          `${this.scraperFailStreak} ciclos seguidos fallidos.\n<i>${new Date().toLocaleString('es-CU')}</i>`);
+      }
+    } catch (e: any) {
+      console.error('[Monitor] No se pudo enviar alerta de error:', e.message);
+    }
+  }
+
+  /** Marca un ciclo exitoso y, si venía de un episodio de fallo notificado, avisa recuperación. */
+  private async onScraperOk() {
+    if (this.scraperAlertSent) {
+      const ciclos = this.scraperFailStreak;
+      this.scraperAlertSent = false;
+      try {
+        const destinos = resolveDestinos(await getMonitorConfig());
+        if (destinos.status) {
+          await sendNotification(destinos.status,
+            `🟢 <b>Scraper BANDEC recuperado</b>\nVolvió a conectar tras ${ciclos} ciclos con fallos.\n<i>${new Date().toLocaleString('es-CU')}</i>`);
+        }
+      } catch (e: any) {
+        console.error('[Monitor] No se pudo enviar alerta de recuperación:', e.message);
+      }
+    }
+    this.scraperFailStreak = 0;
+  }
 
   async start() {
     const config = await getMonitorConfig();
@@ -253,6 +304,7 @@ class MonitorService {
       if (!check.loggedIn) {
         console.log('[Monitor] Login fallido');
         await updateBankStatus({ online: false, last_check: new Date() });
+        await this.onScraperError('Login fallido');
         return;
       }
 
@@ -299,6 +351,9 @@ class MonitorService {
       }
 
       console.log(`[Monitor] Estado: ${check.online ? 'Online' : 'Offline'}${check.fechaContable ? ` (${check.fechaContable})` : ''}`);
+
+      // Ciclo completado sin excepción → scraper OK (resetea racha; avisa recuperación si aplica)
+      await this.onScraperOk();
     } catch (err: any) {
       console.error(`[Monitor] Error: ${err.message}`);
 
@@ -306,6 +361,8 @@ class MonitorService {
         online: false,
         last_check: new Date(),
       }).catch(() => {});
+
+      await this.onScraperError(err.message);
     } finally {
       await browser.close().catch(() => {});
       this.running = false;
