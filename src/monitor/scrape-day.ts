@@ -125,10 +125,20 @@ function extractRows(page: Page): Promise<string[][]> {
 
 function parseRows(rows: string[][]): TransferenciaEntrada[] {
   const results: TransferenciaEntrada[] = [];
+  let loggedShape = false;
   for (const row of rows) {
     if (row.length < 6) continue;
     if (!row[0] || row[0] === '') continue;
-    if (row[3]?.includes('Saldo')) continue;
+    if (row[3]?.includes('Saldo')) {
+      // DIAG-SALDO: volcar filas de saldo para diseñar la captura del saldo por operación
+      console.log(`[Scrape][DIAG-SALDO] cells=${row.length} ${JSON.stringify(row)}`);
+      continue;
+    }
+    if (!loggedShape) {
+      // DIAG-SALDO: forma de la primera fila de operación (¿hay columna de saldo extra?)
+      console.log(`[Scrape][DIAG-OPSHAPE] cells=${row.length} ${JSON.stringify(row)}`);
+      loggedShape = true;
+    }
     const parsed = parseOperacionRow(row);
     if (parsed) results.push(parsed);
   }
