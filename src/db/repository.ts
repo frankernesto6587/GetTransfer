@@ -867,6 +867,41 @@ export async function getSaldoDespues(fecha: Date, refCorriente: string): Promis
   return Math.round((daily.saldoApertura + acumulado) * 100) / 100;
 }
 
+/**
+ * Verifica el saldo de un día contra el cierre REAL del banco:
+ *  - cuadre:  apertura + Σ(Cr−Db del día) debe == cierre. Si no, faltan/sobran operaciones
+ *             ese día (los saldos por operación estarían desfasados).
+ *  - cadena:  la apertura de hoy debe == el cierre del último día con datos (hueco de días).
+ * Devuelve null si aún no hay saldo de cierre capturado para el día (nada que comparar).
+ */
+export async function verificarSaldoDia(fecha: Date): Promise<{
+  apertura: number; cierre: number; calculado: number;
+  desfaseCuadre: number; desfaseCadena: number | null;
+} | null> {
+  const dia = diaUTC(fecha);
+  const daily = await prisma.dailyBalance.findUnique({ where: { fecha: dia } });
+  if (!daily || daily.saldoCierre == null) return null;
+
+  const finDia = new Date(dia.getTime() + 86_400_000);
+  const rows = await prisma.transferencia.findMany({
+    where: { fecha: { gte: dia, lt: finDia } },
+    select: { importe: true, tipo: true },
+  });
+  const neto = rows.reduce((s, r) => s + (r.tipo === 'Cr' ? r.importe : -r.importe), 0);
+  const calculado = Math.round((daily.saldoApertura + neto) * 100) / 100;
+  const desfaseCuadre = Math.round((calculado - daily.saldoCierre) * 100) / 100;
+
+  const prev = await prisma.dailyBalance.findFirst({
+    where: { fecha: { lt: dia }, saldoCierre: { not: null } },
+    orderBy: { fecha: 'desc' },
+  });
+  const desfaseCadena = prev?.saldoCierre != null
+    ? Math.round((daily.saldoApertura - prev.saldoCierre) * 100) / 100
+    : null;
+
+  return { apertura: daily.saldoApertura, cierre: daily.saldoCierre, calculado, desfaseCuadre, desfaseCadena };
+}
+
 // ── User ──
 
 export async function getUserByEmail(email: string) {

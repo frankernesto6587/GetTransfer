@@ -1,4 +1,4 @@
-import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, getSaldoDespues, TransferenciaNueva } from '../db/repository';
+import { getMonitorConfig, getBankStatus, updateBankStatus, upsertMany, getSaldoDespues, verificarSaldoDia, TransferenciaNueva } from '../db/repository';
 import { sendNotification, sendBatch, TelegramConfig } from './telegram';
 import { formatCreditosList, formatDebitoMessage, escapeHtml } from './format-messages';
 import { loginAndCheck, scrapeDay, navigateToOperaciones, scrapeMonth as scrapeMonthFn } from './scrape-day';
@@ -12,6 +12,15 @@ const DEBITOS_MUESTRA_SI_EXCESO = 10;
 // Anti-spam de alertas del scraper: solo avisa cuando el fallo es sostenido
 // (N ciclos seguidos ≈ N*intervalo), no en cada blip de conectividad.
 const ALERTAR_SCRAPER_TRAS_FALLOS = 3;
+
+// Desfase de saldo: alerta si el descuadre persiste N ciclos (evita blips por un
+// scrape parcial de un solo ciclo, que se auto-corrige al re-scrapear el día).
+const ALERTAR_DESFASE_TRAS = 2;
+const TOL_SALDO = 0.01;
+
+function fmt(n: number): string {
+  return n.toLocaleString('es-CU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 /** Traduce el error crudo de Playwright a un mensaje entendible. */
 function describirErrorScraper(msg: string): string {
@@ -102,6 +111,55 @@ class MonitorService {
   private running = false;
   private scraperFailStreak = 0;      // ciclos consecutivos con fallo de scraper
   private scraperAlertSent = false;   // ya se notificó el episodio de fallo actual
+  private saldoDesfaseStreak = 0;     // ciclos consecutivos con saldo descuadrado
+  private saldoAlertSent = false;     // ya se notificó el descuadre actual
+
+  /** Verifica que el saldo del día cuadre con el cierre del banco; alerta si hay desfase persistente. */
+  private async checkSaldo(fecha: Date) {
+    let chk;
+    try {
+      chk = await verificarSaldoDia(fecha);
+    } catch (e: any) {
+      console.error('[Monitor] checkSaldo error:', e.message);
+      return;
+    }
+    if (!chk) return; // sin cierre capturado aún → nada que comparar
+
+    const hayDesfase = Math.abs(chk.desfaseCuadre) > TOL_SALDO
+      || (chk.desfaseCadena != null && Math.abs(chk.desfaseCadena) > TOL_SALDO);
+
+    if (!hayDesfase) {
+      // Cuadra: si veníamos alertados, avisar que se resolvió
+      if (this.saldoAlertSent) {
+        this.saldoAlertSent = false;
+        const destinos = resolveDestinos(await getMonitorConfig());
+        if (destinos.status) await sendNotification(destinos.status, `✅ <b>Saldo cuadrado nuevamente</b>`).catch(() => {});
+      }
+      this.saldoDesfaseStreak = 0;
+      return;
+    }
+
+    this.saldoDesfaseStreak++;
+    if (this.saldoDesfaseStreak < ALERTAR_DESFASE_TRAS || this.saldoAlertSent) return;
+    this.saldoAlertSent = true;
+    try {
+      const destinos = resolveDestinos(await getMonitorConfig());
+      if (destinos.status) {
+        const cadena = (chk.desfaseCadena != null && Math.abs(chk.desfaseCadena) > TOL_SALDO)
+          ? `\n🔗 Cadena rota: apertura de hoy no coincide con el cierre del día anterior (dif $${fmt(chk.desfaseCadena)}).`
+          : '';
+        await sendNotification(destinos.status,
+          `⚠️ <b>Saldo descuadrado</b>\n` +
+          `Cierre del banco: $${fmt(chk.cierre)}\n` +
+          `Calculado (apertura + movimientos): $${fmt(chk.calculado)}\n` +
+          `Desfase: <b>$${fmt(chk.desfaseCuadre)}</b> — probablemente faltan operaciones del día.${cadena}\n` +
+          `<i>Revisa el día o sube el estado de cuenta.</i>`);
+        console.log(`[Monitor] Alerta desfase de saldo: ${chk.desfaseCuadre}`);
+      }
+    } catch (e: any) {
+      console.error('[Monitor] No se pudo enviar alerta de desfase:', e.message);
+    }
+  }
 
   /** Registra un fallo del scraper y notifica por Telegram si es sostenido. */
   private async onScraperError(rawMsg: string) {
@@ -352,6 +410,11 @@ class MonitorService {
 
       if (nuevasList.length > 0) {
         await notifyNuevas(destinos, nuevasList);
+      }
+
+      // Verifica que el saldo del día cuadre con el cierre real del banco
+      if (check.online) {
+        await this.checkSaldo(new Date());
       }
 
       console.log(`[Monitor] Estado: ${check.online ? 'Online' : 'Offline'}${check.fechaContable ? ` (${check.fechaContable})` : ''}`);
