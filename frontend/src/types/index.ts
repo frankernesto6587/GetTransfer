@@ -341,6 +341,8 @@ export interface SolicitudCandidate {
   reclamadaPor: string | null
   nivel: number
   diasDiferencia: number | null
+  /** Comisión que el banco descontó en la transferencia (0 si no hubo). */
+  comisionDescontada?: number
 }
 
 export interface ConciliarBuscarResponse {

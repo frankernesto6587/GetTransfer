@@ -138,6 +138,9 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
 
   // Common values
   const importe = isBandec ? data.importe : data.amount
+  // Comisión que el banco descontó al acreditar (BPA desde ago-2026). Solo existe
+  // en el lado banco; los pagos de Odoo no la traen.
+  const comision = isBandec ? Number(data.comisionDescontada ?? 0) : 0
   const nombre = isBandec ? data.nombreOrdenante : (data.card_holder_name || data.gt_nombre_ordenante)
   const ci = isBandec ? data.ciOrdenante : (data.card_holder_ci || data.gt_ci_ordenante)
   const cuenta = isBandec ? data.cuentaOrdenante : (data.card_number || data.gt_cuenta_ordenante)
@@ -205,8 +208,20 @@ export function TransferDetailModal({ transfer, onClose, onRefresh }: { transfer
         <div className="px-6 py-4 space-y-5">
           {/* Importe destacado */}
           <div className="text-center py-3 rounded-xl bg-gold/10 border border-gold/20">
-            <div className="text-tertiary text-xs uppercase tracking-wider mb-1">Importe</div>
+            <div className="text-tertiary text-xs uppercase tracking-wider mb-1">
+              {comision > 0 ? 'Importe recibido' : 'Importe'}
+            </div>
             <div className="font-mono text-2xl font-bold text-gold">{formatCurrency(importe)}</div>
+            {comision > 0 && (
+              <div className="mt-2 pt-2 border-t border-gold/20 text-xs space-y-0.5">
+                <div className="text-amber-400">
+                  Comisión del banco: −{formatCurrency(comision)}
+                </div>
+                <div className="text-secondary">
+                  Transferido por el cliente: <span className="font-mono text-white">{formatCurrency(importe + comision)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Ordenante */}

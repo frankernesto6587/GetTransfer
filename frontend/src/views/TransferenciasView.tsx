@@ -96,7 +96,20 @@ function makeColumns(onView: (t: Transferencia) => void) {
       cell: (info) => {
         const t = info.row.original
         if (t.tipo !== 'Cr') return <span className="text-tertiary">—</span>
-        return <span className="font-mono whitespace-nowrap text-emerald-400">{formatCurrency(t.importe)}</span>
+        const comision = Number(t.comisionDescontada ?? 0)
+        return (
+          <span className="font-mono whitespace-nowrap text-emerald-400">
+            {formatCurrency(t.importe)}
+            {comision > 0 && (
+              <span
+                className="ml-1 text-amber-400 text-[10px]"
+                title={`El banco descontó ${formatCurrency(comision)} de comisión. El cliente transfirió ${formatCurrency(t.importe + comision)}.`}
+              >
+                −{formatCurrency(comision)}
+              </span>
+            )}
+          </span>
+        )
       },
       meta: { align: 'right' },
     }),

@@ -344,9 +344,27 @@ export function ConciliarView() {
                     <span className={`font-mono text-xs ${m?.cuenta ? matchClass : 'text-white'}`}>{transfer.cuentaOrdenante || '—'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-tertiary">Importe</span>
-                    <span className={`font-mono font-medium ${m?.importe ? matchClass : 'text-white'}`}>${transfer.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-tertiary">
+                      {tieneComision(transfer) ? 'Importe recibido' : 'Importe'}
+                    </span>
+                    <span className={`font-mono font-medium ${m?.importe && !tieneComision(transfer) ? matchClass : 'text-white'}`}>${transfer.importe.toLocaleString('es-CU', { minimumFractionDigits: 2 })}</span>
                   </div>
+                  {tieneComision(transfer) && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-tertiary">Comisión del banco</span>
+                        <span className="font-mono text-amber-400">
+                          −${Number(transfer.comisionDescontada).toLocaleString('es-CU', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-border pt-2">
+                        <span className="text-tertiary">Transferido por el cliente</span>
+                        <span className={`font-mono font-medium ${m?.importe ? matchClass : 'text-white'}`}>
+                          ${importeBruto(transfer).toLocaleString('es-CU', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-tertiary">Fecha</span>
                     <span className="text-white">{displayFecha(transfer.fecha)}</span>
@@ -467,9 +485,21 @@ function getMatchingFields(transfer: Transferencia, sol: SolicitudCandidate) {
     cuenta: fieldsMatch(transfer.cuentaOrdenante, sol.clienteCuenta),
     nombre: fieldsMatch(transfer.nombreOrdenante, sol.clienteNombre) ? 'exact' as const
       : nameSim(transfer.nombreOrdenante, sol.clienteNombre) >= 50 ? 'similar' as const : 'none' as const,
-    importe: transfer.importe === Number(sol.monto),
+    // El cliente ordenó `monto`; el banco descontó su comisión y acreditó el neto.
+    // Sin contar la comisión, una transferencia con comisión salía SIEMPRE en rojo
+    // aunque fuera la correcta.
+    importe: Math.abs(importeBruto(transfer) - Number(sol.monto)) < 0.01,
     ref: fieldsMatch(transfer.refOrigen, sol.transferCode),
   }
+}
+
+/** Lo que el cliente ordenó = neto acreditado + comisión que descontó el banco. */
+export function importeBruto(t: { importe: number; comisionDescontada?: number | null }): number {
+  return Number(t.importe) + Number(t.comisionDescontada ?? 0)
+}
+
+export function tieneComision(t: { comisionDescontada?: number | null }): boolean {
+  return Number(t.comisionDescontada ?? 0) > 0
 }
 
 function nameSim(a: string, b: string): number {
@@ -564,6 +594,11 @@ function SolicitudCard({
           <span className="text-tertiary">Monto</span>
           <p className={`font-mono ${m?.importe ? matchClass : 'text-white'}`}>
             ${Number(c.monto).toLocaleString('es-CU', { minimumFractionDigits: 2 })}
+            {m?.importe && tieneComision(c) && (
+              <span className="ml-1 text-amber-400 text-[10px] align-middle" title="Coincide contando la comisión que descontó el banco">
+                (c/comisión)
+              </span>
+            )}
           </p>
         </div>
         <div>
