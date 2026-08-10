@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireRole } from '../middleware/auth';
-import { prisma, nameSimilarity } from '../../db/repository';
+import { prisma, nameSimilarity, importeCuadra } from '../../db/repository';
 import { Prisma } from '@prisma/client';
 
 // ── Schemas ──
@@ -75,17 +75,22 @@ interface SolicitudCandidate {
   reclamadaPor: string | null;
   nivel: number;
   diasDiferencia: number | null;
+  /** Comision que el banco descontó en esta transferencia (0 si no hubo).
+   *  Se expone para que el operador vea por qué el neto no coincide con el monto. */
+  comisionDescontada: number;
 }
 
 function findSolicitudMatches(
   solicitudes: any[],
-  transfer: { importe: number; refOrigen: string; cuentaOrdenante: string; ciOrdenante: string; nombreOrdenante: string; fecha: Date },
+  transfer: { importe: number; comisionDescontada?: number | null; refOrigen: string; cuentaOrdenante: string; ciOrdenante: string; nombreOrdenante: string; fecha: Date },
 ): SolicitudCandidate[] {
   const candidates: SolicitudCandidate[] = [];
+  const comision = Number(transfer.comisionDescontada ?? 0);
 
   for (const sol of solicitudes) {
-    const montoExacto = Number(sol.monto) === transfer.importe;
-    if (!montoExacto) continue;
+    // El cliente ordenó `monto`; el banco descontó su comisión y acreditó el neto.
+    // Casa si neto + comisión == monto. Con comisión 0 es la igualdad de siempre.
+    if (!importeCuadra(transfer, sol.monto)) continue;
 
     const codeMatch = transfer.refOrigen && sol.transferCode &&
       transfer.refOrigen.trim().toLowerCase() === sol.transferCode.trim().toLowerCase();
@@ -125,6 +130,7 @@ function findSolicitudMatches(
               / (1000 * 60 * 60 * 24)
             )
           : null,
+        comisionDescontada: comision,
       });
     }
   }
@@ -302,18 +308,23 @@ export async function conciliarRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: `Ya conciliada con solicitud ${transfer.solicitud.codigo}` });
     }
 
-    // Search unmatched solicitudes with matching amount
+    // Search unmatched solicitudes with matching amount.
+    // El monto de la solicitud es el BRUTO que ordenó el cliente; el banco
+    // acreditó el neto tras descontar su comisión. Sin esto, una transferencia
+    // con comisión no mostraba NINGÚN candidato y no se podía conciliar ni a mano.
+    const montoBruto = transfer.importe + Number(transfer.comisionDescontada ?? 0);
     const solicitudes = await prisma.solicitud.findMany({
       where: {
         reconStatus: { in: ['unmatched', 'suggested'] },
         workflowStatus: { not: 'cancelled' },
-        monto: transfer.importe,
+        monto: montoBruto,
       },
       orderBy: { creadoAt: 'desc' },
     });
 
     const candidates = findSolicitudMatches(solicitudes, {
       importe: transfer.importe,
+      comisionDescontada: transfer.comisionDescontada,
       refOrigen: transfer.refOrigen,
       cuentaOrdenante: transfer.cuentaOrdenante,
       ciOrdenante: transfer.ciOrdenante,

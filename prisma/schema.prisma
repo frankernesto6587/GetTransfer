@@ -12,6 +12,11 @@ model Transferencia {
   refCorriente        String
   refOrigen           String
   importe             Float
+  /// Comisión que el banco descontó al acreditar. El BPA empezó a cobrar 0,8%
+  /// el 2026-08-06; se espera que se extienda a los demás bancos. `importe` es
+  /// SIEMPRE el neto acreditado (lo que cuadra con el saldo de la cuenta); el
+  /// bruto que ordenó el cliente es `importe + comisionDescontada`.
+  comisionDescontada  Float    @default(0)
   tipo                String
   source              String   @default("scraper")
   nombreOrdenante     String   @default("")

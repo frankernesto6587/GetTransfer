@@ -98,7 +98,7 @@ export async function exportRoutes(app: FastifyInstance) {
   // and reclamo data (Odoo POS) when claimed.
 
   const BANCO_COLUMNS = [
-    'fecha_banco', 'importe', 'tipo', 'ref_origen', 'ref_corriente',
+    'fecha_banco', 'importe', 'comision', 'importe_bruto', 'tipo', 'ref_origen', 'ref_corriente',
     'nombre_banco', 'ci_banco', 'cuenta_banco', 'canal_banco',
     'matcheada', 'reclamada',
     'codigo_gt', 'transfer_code', 'nombre_solicitud', 'ci_solicitud',
@@ -135,6 +135,8 @@ export async function exportRoutes(app: FastifyInstance) {
       const row: Record<string, unknown> = {
         fecha_banco: t.fecha instanceof Date ? t.fecha.toISOString().split('T')[0] : t.fecha,
         importe: t.importe,
+        comision: t.comisionDescontada ?? 0,
+        importe_bruto: t.importe + Number(t.comisionDescontada ?? 0),
         tipo: t.tipo,
         ref_origen: t.refOrigen,
         ref_corriente: t.refCorriente,

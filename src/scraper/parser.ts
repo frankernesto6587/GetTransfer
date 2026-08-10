@@ -9,7 +9,11 @@ export interface TransferenciaEntrada {
   fecha: Date;
   refCorriente: string;
   refOrigen: string;
-  importe: number;
+  importe: number;             // NETO acreditado (lo que entra a la cuenta)
+  /** Comision descontada por el banco. El bruto que ordeno el cliente es
+   *  `importe + comisionDescontada`. Opcional: statement-transformer construye
+   *  el objeto literal completo y no la tiene. */
+  comisionDescontada?: number;
   tipo: string;
   // Campos extraidos de Observaciones:
   nombreOrdenante: string;
@@ -114,7 +118,9 @@ function parseTextoFormat(obs: string): Partial<TransferenciaEntrada> {
   return result;
 }
 
-function decodeHtmlEntities(s: string): string {
+/** Exportada para que el backfill de comisiones reuse la misma decodificacion:
+ *  observacionesRaw se guarda SIN decodificar (ver parseOperacionRow). */
+export function decodeHtmlEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -123,16 +129,35 @@ function decodeHtmlEntities(s: string): string {
     .replace(/&apos;/g, "'");
 }
 
+/**
+ * Comision que el banco descuenta al acreditar. El BPA la declara al final del
+ * DET_PAGO: "... BENEFICIARIO: 0659834001469612 COMISI N DESCONTADA: 40.00".
+ *
+ * El banco manda la "O" de COMISION rota (mojibake), y decodeHtmlEntities no lo
+ * arregla porque solo maneja entidades HTML — de ahi el comodin entre COMISI y N.
+ * Se aplica sobre las observaciones completas y no dentro de una rama de formato
+ * concreta: hoy solo cobra el BPA (formato xml), pero se espera que se extienda a
+ * los demas bancos y este helper ya los cubre sin tocar nada.
+ *
+ * Devuelve 0 cuando no hay comision, que es el caso de la inmensa mayoria.
+ */
+export function extractComision(text: string): number {
+  const m = text.match(/COMISI.{0,4}N\s+DESCONTADA:\s*([\d,]+\.?\d*)/i);
+  if (!m) return 0;
+  return parseFloat(m[1].replace(/,/g, '')) || 0;
+}
+
 export function parseObservaciones(obs: string): Partial<TransferenciaEntrada> {
   // BPA messages routed through email gateway arrive double-html-encoded.
   // textContent in the scraper only decodes once, so apply a second pass here.
   const decoded = decodeHtmlEntities(obs);
+  const comisionDescontada = extractComision(decoded);
   if (decoded.includes('<RCSLBTR_102>') || decoded.includes('<DET_PAGO>')) {
-    return parseXMLFormat(decoded);
+    return { ...parseXMLFormat(decoded), comisionDescontada };
   } else if (decoded.includes('CREDITO RECIBIDO') || decoded.includes('ORDENANTE NOMBRE:')) {
-    return parseTextoFormat(decoded);
+    return { ...parseTextoFormat(decoded), comisionDescontada };
   }
-  return { formato: 'desconocido' };
+  return { formato: 'desconocido', comisionDescontada };
 }
 
 export function parseOperacionRow(cells: string[]): TransferenciaEntrada | null {
@@ -152,6 +177,7 @@ export function parseOperacionRow(cells: string[]): TransferenciaEntrada | null 
     refCorriente,
     refOrigen,
     importe: parseFloat(importe.replace(/,/g, '')) || 0,
+    comisionDescontada: parsed.comisionDescontada || 0,
     tipo,
     nombreOrdenante: parsed.nombreOrdenante || '',
     ciOrdenante: parsed.ciOrdenante || '',

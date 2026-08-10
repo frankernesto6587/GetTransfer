@@ -67,6 +67,7 @@ export async function upsertMany(
       refCorriente: t.refCorriente,
       refOrigen: t.refOrigen,
       importe: t.importe,
+      comisionDescontada: t.comisionDescontada ?? 0,
       tipo: t.tipo,
       source,
       nombreOrdenante: t.nombreOrdenante,
@@ -111,8 +112,36 @@ function esCodigoBandec(code: string | null | undefined): code is string {
 }
 
 /**
+ * Holgura para acotar en SQL los candidatos por importe. La comision real del BPA
+ * es 0,8%; se busca con un 5% de margen y despues se valida la igualdad exacta en
+ * JS con importeCuadra(). Sirve solo para no traer media tabla, no como criterio.
+ */
+const MAX_COMISION_RATIO = 0.05;
+
+/** Rango de importe NETO compatible con un monto bruto dado. */
+export function rangoImporteNeto(monto: number) {
+  return { gte: monto * (1 - MAX_COMISION_RATIO), lte: monto };
+}
+
+/**
+ * El cliente ordena `monto`; el banco descuenta su comision y acredita el neto.
+ * Casa si  neto + comision == monto.
+ *
+ * Con comisionDescontada = 0 (BANDEC, y todo lo anterior al 2026-08-06) es la
+ * igualdad exacta de siempre, asi que el criterio es retrocompatible y ya cubre
+ * cualquier banco que empiece a cobrar comision.
+ */
+export function importeCuadra(
+  t: { importe: number; comisionDescontada?: number | null },
+  monto: unknown,
+): boolean {
+  const bruto = Number(t.importe) + Number(t.comisionDescontada ?? 0);
+  return Math.abs(bruto - Number(monto)) < 0.01;
+}
+
+/**
  * Auto-conciliar solicitudes pendientes con transferencias del banco.
- * Match estricto: monto exacto + transferCode/refOrigen + cuenta + CI (4 campos).
+ * Match estricto: importe (ver importeCuadra) + transferCode/refOrigen + cuenta + CI.
  * Solo procesa solicitudes recientes (ventana AUTO_MATCH_MAX_DIAS): las viejas
  * sin conciliar se dejan tal cual, a revision manual.
  */
@@ -133,11 +162,13 @@ export async function tryAutoMatch(): Promise<number> {
     // Regla BANDEC: los codigos de BANDEC siempre empiezan por "KW". Una solicitud
     // cuyo transferCode NO empieza por KW no puede casar con una transferencia BANDEC.
     if (!esCodigoBandec(sol.transferCode)) continue;
-    const transfer = await prisma.transferencia.findFirst({
+    // El rango de importe solo acota candidatos; la igualdad la decide
+    // importeCuadra() sobre el bruto (neto + comision descontada por el banco).
+    const posibles = await prisma.transferencia.findMany({
       where: {
         solicitud: { is: null },
         tipo: 'Cr',
-        importe: Number(sol.monto),
+        importe: rangoImporteNeto(Number(sol.monto)),
         // trim(): los datos de la solicitud llegan a veces con espacios sobrantes
         // (p.ej. clienteCi "12345678901 "), lo que rompia el match exacto.
         refOrigen: { equals: sol.transferCode.trim(), mode: 'insensitive' },
@@ -145,6 +176,7 @@ export async function tryAutoMatch(): Promise<number> {
         ciOrdenante: sol.clienteCi.trim(),
       },
     });
+    const transfer = posibles.find(t => importeCuadra(t, sol.monto));
     if (transfer) {
       await prisma.solicitud.update({
         where: { id: sol.id },
@@ -239,16 +271,19 @@ async function tryAutoMatchBpa(cutoff: Date): Promise<number> {
     // aunque haya un candidato; se deja al pase BANDEC / revision manual para no confirmar
     // con la transferencia equivocada. (Los codigos no-KW, p.ej. BPA "BR...", no aplican.)
     if (esCodigoBandec(sol.transferCode)) {
-      const bandec = await prisma.transferencia.findFirst({
+      // Mismo criterio de importe que el pase BANDEC: si aqui se quedara la
+      // igualdad exacta mientras el pase BPA tolera comision, esta guarda
+      // dejaria de detectar el caso BANDEC y BPA podria robarle el match.
+      const bandec = await prisma.transferencia.findMany({
         where: {
           solicitud: { is: null },
           tipo: 'Cr',
-          importe: Number(sol.monto),
+          importe: rangoImporteNeto(Number(sol.monto)),
           refOrigen: { equals: sol.transferCode.trim(), mode: 'insensitive' },
         },
-        select: { id: true },
+        select: { id: true, importe: true, comisionDescontada: true },
       });
-      if (bandec) continue;
+      if (bandec.some(t => importeCuadra(t, sol.monto))) continue;
     }
 
     const desde = new Date(sol.creadoAt.getTime() - BPA_VENTANA_DIAS * 86_400_000);
@@ -259,7 +294,7 @@ async function tryAutoMatchBpa(cutoff: Date): Promise<number> {
         solicitud: { is: null },
         tipo: 'Cr',
         canalEmision: BPA_CANAL,
-        importe: Number(sol.monto),
+        importe: rangoImporteNeto(Number(sol.monto)),
         cuentaOrdenante: sol.clienteCuenta.trim(),
         fecha: { gte: desde, lte: hasta },
         ...(usadas.size ? { id: { notIn: [...usadas] } } : {}),
@@ -267,7 +302,8 @@ async function tryAutoMatchBpa(cutoff: Date): Promise<number> {
     });
 
     const porNombre = candidatos.filter(
-      (t) => nameSimilarity(t.nombreOrdenante, sol.clienteNombre) >= BPA_NOMBRE_SIM_MIN
+      (t) => importeCuadra(t, sol.monto)
+        && nameSimilarity(t.nombreOrdenante, sol.clienteNombre) >= BPA_NOMBRE_SIM_MIN
     );
     if (porNombre.length === 0) continue;
 

@@ -13,8 +13,10 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "backfill:categorias": "ts-node --transpile-only scripts/backfill-categorias.ts",
+    "backfill:comisiones": "ts-node --transpile-only scripts/backfill-comisiones.ts",
     "notify:debitos-mes": "ts-node --transpile-only scripts/notify-debitos-mes.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "ts-node --transpile-only tests/comision.test.ts"
   },
   "keywords": [],
   "author": "",

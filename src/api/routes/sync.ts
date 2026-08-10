@@ -535,7 +535,14 @@ export async function syncRoutes(app: FastifyInstance) {
           refCorriente: s.transferencia.refCorriente,
           refOrigen: s.transferencia.refOrigen,
           fecha: s.transferencia.fecha.toISOString().slice(0, 10),
-          importe: s.transferencia.importe,
+          // BRUTO: lo que el cliente ordenó = neto acreditado + comisión que el
+          // banco descontó. Es lo que Odoo escribe en gt_importe_banco y lo que
+          // el POS deja cobrar, así que debe ser lo pactado con el cliente y no
+          // lo que quedó tras la comisión (que la absorbe el negocio).
+          importe: s.transferencia.importe + Number(s.transferencia.comisionDescontada ?? 0),
+          // Neto realmente acreditado y comisión, por si se quiere reportar.
+          importeNeto: s.transferencia.importe,
+          comisionDescontada: Number(s.transferencia.comisionDescontada ?? 0),
         } : null,
       })),
     };

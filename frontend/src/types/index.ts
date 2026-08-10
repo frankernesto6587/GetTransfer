@@ -3,7 +3,9 @@ export interface Transferencia {
   fecha: string
   refCorriente: string
   refOrigen: string
+  /** Neto acreditado. El bruto que ordenó el cliente es `importe + comisionDescontada`. */
   importe: number
+  comisionDescontada: number
   tipo: string
   nombreOrdenante: string
   ciOrdenante: string
