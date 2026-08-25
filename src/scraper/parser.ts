@@ -130,19 +130,28 @@ export function decodeHtmlEntities(s: string): string {
 }
 
 /**
- * Comision que el banco descuenta al acreditar. El BPA la declara al final del
- * DET_PAGO: "... BENEFICIARIO: 0659834001469612 COMISI N DESCONTADA: 40.00".
+ * Comision que el banco descuenta al acreditar. Cada banco la declara con su
+ * propio texto dentro de las observaciones; se soportan los formatos conocidos:
  *
- * El banco manda la "O" de COMISION rota (mojibake), y decodeHtmlEntities no lo
- * arregla porque solo maneja entidades HTML — de ahi el comodin entre COMISI y N.
- * Se aplica sobre las observaciones completas y no dentro de una rama de formato
- * concreta: hoy solo cobra el BPA (formato xml), pero se espera que se extienda a
- * los demas bancos y este helper ya los cubre sin tocar nada.
+ *  - BPA (formato xml) y depositos de efectivo:
+ *      "... BENEFICIARIO: 0659834001469612 COMISI N DESCONTADA: 40.00"
+ *      (el banco manda la "O" de COMISION rota/mojibake, y decodeHtmlEntities no
+ *       lo arregla porque solo maneja entidades HTML — de ahi el comodin COMISI.{0,4}N).
+ *  - BANCA MOVIL de BANDEC (formato texto, empezo ~2026-08): descuenta 0,8% en
+ *      transferencias de persona natural a juridica y lo declara distinto:
+ *      "... Descuento de: 40.00 por transferencia de persona natural a Juridica de: 0.01"
+ *
+ * Se aplica sobre las observaciones completas, sin ramificar por banco. Si un banco
+ * nuevo usa un texto distinto, se agrega otro patron aqui y el resto (matcher,
+ * conciliar) ya lo cuenta sin tocar nada mas.
  *
  * Devuelve 0 cuando no hay comision, que es el caso de la inmensa mayoria.
  */
 export function extractComision(text: string): number {
-  const m = text.match(/COMISI.{0,4}N\s+DESCONTADA:\s*([\d,]+\.?\d*)/i);
+  // BPA + depositos: "COMISI[ON] DESCONTADA: 40.00"
+  let m = text.match(/COMISI.{0,4}N\s+DESCONTADA:\s*([\d,]+\.?\d*)/i);
+  // BANCA MOVIL (BANDEC): "Descuento de: 40.00 por transferencia ..."
+  if (!m) m = text.match(/Descuento de:\s*([\d,]+\.?\d*)\s+por transferencia/i);
   if (!m) return 0;
   return parseFloat(m[1].replace(/,/g, '')) || 0;
 }
