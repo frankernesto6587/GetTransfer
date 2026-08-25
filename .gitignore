@@ -6,3 +6,6 @@ data/
 *.png
 *.jpeg
 .playwright-mcp/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
