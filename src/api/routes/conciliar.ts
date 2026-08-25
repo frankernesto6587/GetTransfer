@@ -31,6 +31,7 @@ const solicitudesQuerySchema = z.object({
   codigo: z.string().optional(),
   workflowStatus: z.enum(['pending', 'claimed', 'cancelled']).optional(),
   reconStatus: z.enum(['unmatched', 'suggested', 'matched']).optional(),
+  soloDuplicados: z.coerce.boolean().optional(),
   fechaDesde: z.string().optional(),
   fechaHasta: z.string().optional(),
   orderBy: z.string().optional(),
@@ -184,6 +185,7 @@ export async function conciliarRoutes(app: FastifyInstance) {
     if (q.codigo) where.codigo = { contains: q.codigo, mode: 'insensitive' };
     if (q.workflowStatus) where.workflowStatus = q.workflowStatus;
     if (q.reconStatus) where.reconStatus = q.reconStatus;
+    if (q.soloDuplicados) where.crossDupOf = { not: null };
     if (q.fechaDesde || q.fechaHasta) {
       where.creadoAt = {};
       if (q.fechaDesde) (where.creadoAt as any).gte = new Date(q.fechaDesde + 'T00:00:00Z');

@@ -62,9 +62,67 @@ function parseSyncDate(s: string | null | undefined): Date | null {
 
 // ── Helper: compute fingerprint ──
 
-function computeFingerprint(fields: { clienteCi: string; clienteCuenta: string; monto: number; transferCode?: string }): string {
+export function computeFingerprint(fields: { clienteCi: string; clienteCuenta: string; monto: number; transferCode?: string }): string {
   const raw = `${fields.clienteCi}|${fields.clienteCuenta}|${fields.monto.toFixed(2)}|${fields.transferCode || ''}`;
   return createHash('sha256').update(raw).digest('hex').slice(0, 16);
+}
+
+// ── Detección de solicitudes duplicadas ──
+
+/**
+ * Busca si ya existe una solicitud del MISMO pago (mismo fingerprint) — misma u otra sede.
+ * Solo marca con ALTA CONFIANZA: exige transferCode (clave única del pago), para no
+ * confundir dos pagos legítimos del mismo monto sin código. NO bloquea ni cancela nada;
+ * solo devuelve la referencia a la original (la más antigua) para marcarla como aviso.
+ */
+async function findPosibleDuplicado(
+  fp: string,
+  transferCode: string | undefined | null,
+  codigo: string,
+  sedeId: string,
+  logger: { warn: Function },
+): Promise<{ dupOf: string | null; original: { codigo: string; sedeId: string; reconStatus: string } | null }> {
+  if (!transferCode) return { dupOf: null, original: null };
+  const original = await prisma.solicitud.findFirst({
+    where: { fingerprint: fp, workflowStatus: { not: 'cancelled' }, codigo: { not: codigo } },
+    orderBy: { creadoAt: 'asc' },
+    select: { codigo: true, sedeId: true, reconStatus: true },
+  });
+  if (!original) return { dupOf: null, original: null };
+  logger.warn({
+    msg: 'Duplicate solicitud detected',
+    newCodigo: codigo,
+    newSede: sedeId,
+    existingCodigo: original.codigo,
+    existingSede: original.sedeId,
+    sameSede: original.sedeId === sedeId,
+  });
+  return { dupOf: original.codigo, original };
+}
+
+/**
+ * Alerta Telegram de BAJO RUIDO: solo cuando la original YA está conciliada
+ * (alta señal: el pago ya se procesó y llega otra solicitud igual). Un fallo de
+ * Telegram nunca debe romper el ingreso del sync (todo dentro de try/catch).
+ */
+async function alertaDuplicado(codigo: string, sedeId: string, original: { codigo: string; reconStatus: string }) {
+  if (original.reconStatus !== 'matched') return;
+  try {
+    const [{ resolveDestinos }, { getMonitorConfig }, { sendNotification }] = await Promise.all([
+      import('../../monitor/monitor-service'),
+      import('../../db/repository'),
+      import('../../monitor/telegram'),
+    ]);
+    const destinos = resolveDestinos(await getMonitorConfig());
+    if (destinos.status) {
+      await sendNotification(
+        destinos.status,
+        `🔁 <b>Posible solicitud duplicada</b>\n` +
+        `<code>${codigo}</code> (${sedeId}) parece duplicado de <code>${original.codigo}</code>, ` +
+        `que <b>ya está conciliada</b>.\nRevisa y cancela la repetida si corresponde.`,
+      );
+    }
+  } catch { /* Telegram nunca debe romper el sync */ }
 }
 
 // ── Apply event (tolerant to out-of-order) ──
@@ -95,26 +153,9 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
         return; // Idempotent, same data
       }
 
-      // Check cross-sede duplicate
+      // Detecta posible duplicado (misma u otra sede) por fingerprint. NO bloquea: solo marca.
       const fp = computeFingerprint(fields);
-      let crossDupOf: string | null = null;
-      const crossDup = await prisma.solicitud.findFirst({
-        where: {
-          fingerprint: fp,
-          sedeId: { not: event.sede_id },
-          workflowStatus: { not: 'cancelled' },
-        },
-      });
-      if (crossDup) {
-        logger.warn({
-          msg: 'Cross-sede duplicate detected',
-          newCodigo: event.solicitud_codigo,
-          newSede: event.sede_id,
-          existingCodigo: crossDup.codigo,
-          existingSede: crossDup.sedeId,
-        });
-        crossDupOf = crossDup.codigo;
-      }
+      const dup = await findPosibleDuplicado(fp, fields.transferCode, event.solicitud_codigo, event.sede_id, logger);
 
       await prisma.solicitud.create({
         data: {
@@ -133,9 +174,10 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
           fingerprint: fp,
           creadoAt: parseSyncDate(fields.creadoAt) ?? new Date(),
           creadoPor: fields.creadoPor || '',
-          crossDupOf,
+          crossDupOf: dup.dupOf,
         },
       });
+      if (dup.original) await alertaDuplicado(event.solicitud_codigo, event.sede_id, dup.original);
       break;
     }
 
@@ -143,6 +185,7 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
       if (!sol) {
         // CREATED not received yet — create from CLAIMED (event sourcing)
         const fp = computeFingerprint(fields);
+        const dup = await findPosibleDuplicado(fp, fields.transferCode, event.solicitud_codigo, event.sede_id, logger);
         await prisma.solicitud.create({
           data: {
             codigo: event.solicitud_codigo,
@@ -163,8 +206,10 @@ async function applyEvent(event: SyncEvent, logger: { warn: Function; error: Fun
             workflowStatus: 'claimed',
             reclamadaAt: parseSyncDate(payload.claimed_at) ?? new Date(),
             reclamadaPor: payload.claimed_by || null,
+            crossDupOf: dup.dupOf,
           },
         });
+        if (dup.original) await alertaDuplicado(event.solicitud_codigo, event.sede_id, dup.original);
         break;
       }
 

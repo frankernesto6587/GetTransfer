@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "backfill:categorias": "ts-node --transpile-only scripts/backfill-categorias.ts",
     "backfill:comisiones": "ts-node --transpile-only scripts/backfill-comisiones.ts",
+    "backfill:duplicados": "ts-node --transpile-only scripts/backfill-duplicados.ts",
     "notify:debitos-mes": "ts-node --transpile-only scripts/notify-debitos-mes.ts",
     "build": "tsc",
     "test": "ts-node --transpile-only tests/comision.test.ts"

@@ -660,6 +660,7 @@ export interface SolicitudesParams {
   codigo?: string
   workflowStatus?: string
   reconStatus?: string
+  soloDuplicados?: boolean
   fechaDesde?: string
   fechaHasta?: string
   orderBy?: string
@@ -678,6 +679,7 @@ export function buildSolicitudesUrl(params: SolicitudesParams): string {
   if (params.codigo) sp.set('codigo', params.codigo)
   if (params.workflowStatus) sp.set('workflowStatus', params.workflowStatus)
   if (params.reconStatus) sp.set('reconStatus', params.reconStatus)
+  if (params.soloDuplicados) sp.set('soloDuplicados', 'true')
   if (params.fechaDesde) sp.set('fechaDesde', params.fechaDesde)
   if (params.fechaHasta) sp.set('fechaHasta', params.fechaHasta)
   if (params.orderBy) sp.set('orderBy', params.orderBy)

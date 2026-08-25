@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle, Code, Ticket } from 'lucide-react'
+import { Calendar, User, Hash, Wallet, Building2, Eye, X, Pencil, Save, XCircle, Code, Ticket, AlertTriangle } from 'lucide-react'
 import { FilterBar, FilterInput, FilterSelect, FilterDateRange, DatePresets, type DatePresetKey } from '../components/filters'
 import { createColumnHelper } from '@tanstack/react-table'
 import { DataTable, type SortingState } from '../components/DataTable'
@@ -38,7 +38,22 @@ function makeColumns(onView: (s: Solicitud) => void) {
   return [
     col.accessor('codigo', {
       header: 'Código',
-      cell: (info) => <span className="text-gold font-mono font-medium">{info.getValue()}</span>,
+      cell: (info) => {
+        const dup = info.row.original.crossDupOf
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-gold font-mono font-medium">{info.getValue()}</span>
+            {dup && (
+              <span
+                title={`Posible duplicado de ${dup}`}
+                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-medium"
+              >
+                <AlertTriangle size={11} /> dup
+              </span>
+            )}
+          </span>
+        )
+      },
     }),
     col.accessor('sedeId', {
       header: 'Sede',
@@ -124,6 +139,7 @@ export function SolicitudesView() {
   const [transferCode, setTransferCode] = useState('')
   const [workflowStatus, setWorkflowStatus] = useState('')
   const [reconStatus, setReconStatus] = useState('')
+  const [soloDuplicados, setSoloDuplicados] = useState('')
   const debouncedCodigo = useDebouncedValue(codigo)
   const debouncedNombre = useDebouncedValue(nombre)
   const debouncedCi = useDebouncedValue(ci)
@@ -150,7 +166,7 @@ export function SolicitudesView() {
 
   const clearFilters = useCallback(() => {
     setCodigo(''); setNombre(''); setCi(''); setCuenta(''); setSedeId(''); setTransferCode('')
-    setWorkflowStatus(''); setReconStatus('')
+    setWorkflowStatus(''); setReconStatus(''); setSoloDuplicados('')
     setPage(1)
   }, [])
 
@@ -169,6 +185,7 @@ export function SolicitudesView() {
       transferCode: debouncedTransferCode || undefined,
       workflowStatus: workflowStatus || undefined,
       reconStatus: reconStatus || undefined,
+      soloDuplicados: soloDuplicados ? true : undefined,
       orderBy: sort?.id,
       orderDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     }),
@@ -176,7 +193,7 @@ export function SolicitudesView() {
   })
 
   const total = data?.pagination?.total ?? 0
-  const activeFilterCount = [debouncedCodigo, debouncedNombre, debouncedCi, debouncedCuenta, sedeId, debouncedTransferCode, workflowStatus, reconStatus].filter(Boolean).length
+  const activeFilterCount = [debouncedCodigo, debouncedNombre, debouncedCi, debouncedCuenta, sedeId, debouncedTransferCode, workflowStatus, reconStatus, soloDuplicados].filter(Boolean).length
 
   const pageData = data?.data ?? []
   const pageTotals = pageData.length > 0
@@ -225,6 +242,7 @@ export function SolicitudesView() {
             <FilterInput icon={Building2} label="Sede" value={sedeId} onChange={(v) => { setSedeId(v); setPage(1) }} className="w-full md:w-24" />
             <FilterSelect value={workflowStatus} onChange={(v) => { setWorkflowStatus(v); setPage(1) }} options={workflowOptions} allLabel="Estado: todos" className="w-full md:w-36" />
             <FilterSelect value={reconStatus} onChange={(v) => { setReconStatus(v); setPage(1) }} options={reconOptions} allLabel="Conciliación: todas" className="w-full md:w-40" />
+            <FilterSelect value={soloDuplicados} onChange={(v) => { setSoloDuplicados(v); setPage(1) }} options={[{ value: 'true', label: 'Solo duplicados' }]} allLabel="Duplicados: todos" className="w-full md:w-40" />
           </>
         }
       />
@@ -426,10 +444,13 @@ function SolicitudDetailModal({ solicitud: s, onClose, onRefresh }: { solicitud:
             </div>
           )}
 
-          {/* Cross-sede duplicate */}
+          {/* Posible duplicado (misma u otra sede) */}
           {s.crossDupOf && (
             <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-400">Posible duplicado de: <span className="font-mono">{s.crossDupOf}</span></p>
+              <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                <AlertTriangle size={13} className="shrink-0" />
+                Posible duplicado de: <span className="font-mono">{s.crossDupOf}</span>
+              </p>
             </div>
           )}
         </div>
